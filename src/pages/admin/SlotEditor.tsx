@@ -283,16 +283,29 @@ export default function SlotEditor() {
         [cardPool[i], cardPool[j]] = [cardPool[j], cardPool[i]];
       }
 
-      // Assign to non-locked slots
-      let poolIndex = 0;
-      for (let slotNum = 1; slotNum <= totalSlots; slotNum++) {
-        if (!lockedSlotNumbers.has(slotNum)) {
-          slotAssignments.push({
-            gacha_id: selectedGachaId,
-            slot_number: slotNum,
-            card_id: cardPool[poolIndex++].id,
-          });
+      // Generate random slot numbers (avoiding locked ones)
+      const generateRandomSlotNumbers = (count: number, excludeNumbers: Set<number>): number[] => {
+        const numbers: number[] = [];
+        const maxRange = totalSlots * 100; // Large range for random numbers
+        while (numbers.length < count) {
+          const randomNum = Math.floor(Math.random() * maxRange) + 1;
+          if (!excludeNumbers.has(randomNum) && !numbers.includes(randomNum)) {
+            numbers.push(randomNum);
+          }
         }
+        return numbers;
+      };
+
+      const slotsNeeded = totalSlots - lockedSlotNumbers.size;
+      const randomSlotNumbers = generateRandomSlotNumbers(slotsNeeded, lockedSlotNumbers);
+
+      // Assign cards to random slot numbers
+      for (let i = 0; i < slotsNeeded; i++) {
+        slotAssignments.push({
+          gacha_id: selectedGachaId,
+          slot_number: randomSlotNumbers[i],
+          card_id: cardPool[i].id,
+        });
       }
 
       if (slotAssignments.length > 0) {
