@@ -17,6 +17,7 @@ export type Database = {
       cards: {
         Row: {
           admin_note: string | null
+          category: Database["public"]["Enums"]["card_category"] | null
           conversion_points: number
           created_at: string
           gacha_id: string | null
@@ -28,6 +29,7 @@ export type Database = {
         }
         Insert: {
           admin_note?: string | null
+          category?: Database["public"]["Enums"]["card_category"] | null
           conversion_points?: number
           created_at?: string
           gacha_id?: string | null
@@ -39,6 +41,7 @@ export type Database = {
         }
         Update: {
           admin_note?: string | null
+          category?: Database["public"]["Enums"]["card_category"] | null
           conversion_points?: number
           created_at?: string
           gacha_id?: string | null
@@ -61,6 +64,7 @@ export type Database = {
       gacha_masters: {
         Row: {
           banner_url: string | null
+          category: Database["public"]["Enums"]["card_category"] | null
           created_at: string
           id: string
           pop_image_url: string | null
@@ -73,6 +77,7 @@ export type Database = {
         }
         Insert: {
           banner_url?: string | null
+          category?: Database["public"]["Enums"]["card_category"] | null
           created_at?: string
           id?: string
           pop_image_url?: string | null
@@ -85,6 +90,7 @@ export type Database = {
         }
         Update: {
           banner_url?: string | null
+          category?: Database["public"]["Enums"]["card_category"] | null
           created_at?: string
           id?: string
           pop_image_url?: string | null
@@ -367,6 +373,7 @@ export type Database = {
       action_status: "pending" | "processing" | "completed" | "shipped"
       action_type: "shipping" | "conversion"
       app_role: "admin" | "user"
+      card_category: "yugioh" | "pokemon" | "weiss" | "onepiece"
       card_rarity: "S" | "A" | "B" | "C" | "D"
       gacha_status: "draft" | "active" | "sold_out" | "archived"
       prize_tier: "S" | "A" | "B" | "miss"
@@ -501,6 +508,7 @@ export const Constants = {
       action_status: ["pending", "processing", "completed", "shipped"],
       action_type: ["shipping", "conversion"],
       app_role: ["admin", "user"],
+      card_category: ["yugioh", "pokemon", "weiss", "onepiece"],
       card_rarity: ["S", "A", "B", "C", "D"],
       gacha_status: ["draft", "active", "sold_out", "archived"],
       prize_tier: ["S", "A", "B", "miss"],
