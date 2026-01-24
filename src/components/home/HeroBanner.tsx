@@ -1,59 +1,97 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import gachaBanner1 from "@/assets/gacha-banner-1.jpg";
 
-const banners = [
-  {
-    id: 1,
-    image: gachaBanner1,
-    link: "#",
-    alt: "トレカガチャ メインバナー",
-  },
-];
+interface Banner {
+  id: string;
+  image_url: string;
+  link_url: string | null;
+  title: string | null;
+}
 
 const HeroBanner = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  const { data: banners } = useQuery({
+    queryKey: ["active-hero-banners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("hero_banners")
+        .select("id, image_url, link_url, title")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+
+      if (error) throw error;
+      return data as Banner[];
+    },
+  });
+
+  // Fallback to default banner if no banners in DB
+  const displayBanners: Banner[] = banners?.length
+    ? banners
+    : [{ id: "default", image_url: gachaBanner1, link_url: null, title: "トレカガチャ メインバナー" }];
+
   useEffect(() => {
+    if (displayBanners.length <= 1) return;
+    
     const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % banners.length);
+      setCurrentIndex((prev) => (prev + 1) % displayBanners.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [displayBanners.length]);
+
+  // Reset index if banners change
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [banners?.length]);
 
   const goTo = (index: number) => {
     setCurrentIndex(index);
   };
 
   const goNext = () => {
-    setCurrentIndex((prev) => (prev + 1) % banners.length);
+    setCurrentIndex((prev) => (prev + 1) % displayBanners.length);
   };
 
   const goPrev = () => {
-    setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
+    setCurrentIndex((prev) => (prev - 1 + displayBanners.length) % displayBanners.length);
   };
+
+  const currentBanner = displayBanners[currentIndex];
+
+  const BannerImage = () => (
+    <motion.img
+      key={currentBanner.id}
+      src={currentBanner.image_url}
+      alt={currentBanner.title || "Banner"}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.5 }}
+      className="absolute inset-0 w-full h-full object-cover"
+    />
+  );
 
   return (
     <div className="relative w-full overflow-hidden bg-foreground/5">
       {/* Banner Container */}
       <div className="relative aspect-[21/9] md:aspect-[3/1]">
         <AnimatePresence mode="wait">
-          <motion.img
-            key={banners[currentIndex].id}
-            src={banners[currentIndex].image}
-            alt={banners[currentIndex].alt}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            className="absolute inset-0 w-full h-full object-cover"
-          />
+          {currentBanner.link_url ? (
+            <a href={currentBanner.link_url} className="block absolute inset-0">
+              <BannerImage />
+            </a>
+          ) : (
+            <BannerImage />
+          )}
         </AnimatePresence>
       </div>
 
       {/* Navigation Arrows */}
-      {banners.length > 1 && (
+      {displayBanners.length > 1 && (
         <>
           <button
             onClick={goPrev}
@@ -71,9 +109,9 @@ const HeroBanner = () => {
       )}
 
       {/* Dots */}
-      {banners.length > 1 && (
+      {displayBanners.length > 1 && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
-          {banners.map((_, index) => (
+          {displayBanners.map((_, index) => (
             <button
               key={index}
               onClick={() => goTo(index)}
