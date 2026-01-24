@@ -268,7 +268,8 @@ export function GachaAnimationSystem({
     ];
 
     return () => timers.forEach(clearTimeout);
-  }, [isPlaying, settings.flashCount, onComplete, intensity, isRainbow, sound, playCount]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, settings.flashCount, intensity, isRainbow, playCount]);
 
   // カメラモーション
   const getCameraAnimation = () => {
