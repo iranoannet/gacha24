@@ -10,6 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { GachaResultModal } from "@/components/gacha/GachaResultModal";
+import { GachaConfirmDialog } from "@/components/gacha/GachaConfirmDialog";
+import { GachaPlayAnimation } from "@/components/gacha/GachaPlayAnimation";
 import type { Database } from "@/integrations/supabase/types";
 
 type GachaMaster = Database["public"]["Tables"]["gacha_masters"]["Row"];
@@ -56,6 +58,8 @@ const GachaDetail = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [gachaResult, setGachaResult] = useState<GachaResult | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingPlayCount, setPendingPlayCount] = useState<1 | 10 | 100>(1);
 
   // ガチャマスタ情報取得
   const { data: gacha, isLoading: isLoadingGacha } = useQuery({
@@ -130,7 +134,8 @@ const GachaDetail = () => {
 
   const isLoading = isLoadingGacha || isLoadingCards;
 
-  const handlePlay = async (count: 1 | 10 | 100) => {
+  // 確認ダイアログを表示
+  const handlePlayRequest = (count: 1 | 10 | 100) => {
     if (!user) {
       toast.error("ログインが必要です");
       navigate("/auth");
@@ -139,19 +144,34 @@ const GachaDetail = () => {
 
     if (!gacha) return;
 
-    const totalCost = gacha.price_per_play * count;
-    
-    if (!profile || profile.points_balance < totalCost) {
-      toast.error(`ポイントが足りません（必要: ${totalCost.toLocaleString()}pt）`);
-      return;
-    }
-
     if (gacha.remaining_slots < count) {
       toast.error(`残り口数が足りません（残り: ${gacha.remaining_slots}口）`);
       return;
     }
 
+    setPendingPlayCount(count);
+    setShowConfirm(true);
+  };
+
+  // 実際にガチャを回す
+  const handleConfirmPlay = async () => {
+    if (!user || !gacha) return;
+
+    const count = pendingPlayCount;
+    const totalCost = gacha.price_per_play * count;
+
+    if (!profile || profile.points_balance < totalCost) {
+      toast.error(`ポイントが足りません（必要: ${totalCost.toLocaleString()}pt）`);
+      setShowConfirm(false);
+      return;
+    }
+
+    setShowConfirm(false);
     setIsPlaying(true);
+
+    // アニメーション用の最小待機時間
+    const minAnimationTime = 2000;
+    const startTime = Date.now();
 
     try {
       const { data, error } = await supabase.functions.invoke("play-gacha", {
@@ -169,12 +189,19 @@ const GachaDetail = () => {
         throw new Error(data.error);
       }
 
+      // アニメーションの最低表示時間を確保
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minAnimationTime) {
+        await new Promise((resolve) => setTimeout(resolve, minAnimationTime - elapsed));
+      }
+
       // 結果を表示
       setGachaResult({
         drawnCards: data.drawnCards,
         totalCost: data.totalCost,
         newBalance: data.newBalance,
       });
+      setIsPlaying(false);
       setShowResult(true);
 
       // キャッシュを更新
@@ -182,11 +209,14 @@ const GachaDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["gacha-cards", id] });
       queryClient.invalidateQueries({ queryKey: ["user-profile", user.id] });
     } catch (error: unknown) {
+      setIsPlaying(false);
       const message = error instanceof Error ? error.message : "エラーが発生しました";
       toast.error(message);
-    } finally {
-      setIsPlaying(false);
     }
+  };
+
+  const handleCancelConfirm = () => {
+    setShowConfirm(false);
   };
 
   const handleCloseResult = () => {
@@ -366,31 +396,31 @@ const GachaDetail = () => {
             <div className="grid grid-cols-3 gap-2">
               <Button
                 className="btn-gacha h-12 text-sm font-bold"
-                onClick={() => handlePlay(1)}
+                onClick={() => handlePlayRequest(1)}
                 disabled={isPlaying || gacha.remaining_slots < 1}
               >
                 <div className="flex flex-col items-center">
-                  <span>{isPlaying ? "抽選中..." : "1回ガチャ"}</span>
+                  <span>1回ガチャ</span>
                   <span className="text-xs opacity-80">{gacha.price_per_play.toLocaleString()}コイン</span>
                 </div>
               </Button>
               <Button
                 className="h-12 text-sm font-bold bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white"
-                onClick={() => handlePlay(10)}
+                onClick={() => handlePlayRequest(10)}
                 disabled={isPlaying || gacha.remaining_slots < 10}
               >
                 <div className="flex flex-col items-center">
-                  <span>{isPlaying ? "抽選中..." : "10連ガチャ"}</span>
+                  <span>10連ガチャ</span>
                   <span className="text-xs opacity-80">{(gacha.price_per_play * 10).toLocaleString()}コイン</span>
                 </div>
               </Button>
               <Button
                 className="h-12 text-sm font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-                onClick={() => handlePlay(100)}
+                onClick={() => handlePlayRequest(100)}
                 disabled={isPlaying || gacha.remaining_slots < 100}
               >
                 <div className="flex flex-col items-center">
-                  <span>{isPlaying ? "抽選中..." : "100連ガチャ"}</span>
+                  <span>100連ガチャ</span>
                   <span className="text-xs opacity-80">{(gacha.price_per_play * 100).toLocaleString()}コイン</span>
                 </div>
               </Button>
@@ -398,6 +428,20 @@ const GachaDetail = () => {
           </div>
         </div>
       </div>
+
+      {/* Confirm Dialog */}
+      <GachaConfirmDialog
+        isOpen={showConfirm}
+        onConfirm={handleConfirmPlay}
+        onCancel={handleCancelConfirm}
+        playCount={pendingPlayCount}
+        pricePerPlay={gacha?.price_per_play || 0}
+        currentBalance={userBalance}
+        gachaTitle={gacha?.title || ""}
+      />
+
+      {/* Play Animation */}
+      <GachaPlayAnimation isPlaying={isPlaying} playCount={pendingPlayCount} />
 
       {/* Result Modal */}
       <GachaResultModal
