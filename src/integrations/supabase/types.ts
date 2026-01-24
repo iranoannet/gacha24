@@ -14,16 +14,308 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cards: {
+        Row: {
+          admin_note: string | null
+          conversion_points: number
+          created_at: string
+          gacha_id: string | null
+          id: string
+          image_url: string | null
+          name: string
+          rarity: Database["public"]["Enums"]["card_rarity"]
+        }
+        Insert: {
+          admin_note?: string | null
+          conversion_points?: number
+          created_at?: string
+          gacha_id?: string | null
+          id?: string
+          image_url?: string | null
+          name: string
+          rarity?: Database["public"]["Enums"]["card_rarity"]
+        }
+        Update: {
+          admin_note?: string | null
+          conversion_points?: number
+          created_at?: string
+          gacha_id?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          rarity?: Database["public"]["Enums"]["card_rarity"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cards_gacha_id_fkey"
+            columns: ["gacha_id"]
+            isOneToOne: false
+            referencedRelation: "gacha_masters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gacha_masters: {
+        Row: {
+          banner_url: string | null
+          created_at: string
+          id: string
+          pop_image_url: string | null
+          price_per_play: number
+          remaining_slots: number
+          status: Database["public"]["Enums"]["gacha_status"]
+          title: string
+          total_slots: number
+          updated_at: string
+        }
+        Insert: {
+          banner_url?: string | null
+          created_at?: string
+          id?: string
+          pop_image_url?: string | null
+          price_per_play?: number
+          remaining_slots?: number
+          status?: Database["public"]["Enums"]["gacha_status"]
+          title: string
+          total_slots?: number
+          updated_at?: string
+        }
+        Update: {
+          banner_url?: string | null
+          created_at?: string
+          id?: string
+          pop_image_url?: string | null
+          price_per_play?: number
+          remaining_slots?: number
+          status?: Database["public"]["Enums"]["gacha_status"]
+          title?: string
+          total_slots?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gacha_slots: {
+        Row: {
+          card_id: string | null
+          created_at: string
+          drawn_at: string | null
+          gacha_id: string
+          id: string
+          is_drawn: boolean
+          slot_number: number
+          transaction_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          card_id?: string | null
+          created_at?: string
+          drawn_at?: string | null
+          gacha_id: string
+          id?: string
+          is_drawn?: boolean
+          slot_number: number
+          transaction_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          card_id?: string | null
+          created_at?: string
+          drawn_at?: string | null
+          gacha_id?: string
+          id?: string
+          is_drawn?: boolean
+          slot_number?: number
+          transaction_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gacha_slots_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gacha_slots_gacha_id_fkey"
+            columns: ["gacha_id"]
+            isOneToOne: false
+            referencedRelation: "gacha_masters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gacha_slots_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "user_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_actions: {
+        Row: {
+          action_type: Database["public"]["Enums"]["action_type"]
+          card_id: string | null
+          converted_points: number | null
+          id: string
+          processed_at: string | null
+          requested_at: string
+          slot_id: string | null
+          status: Database["public"]["Enums"]["action_status"]
+          tracking_number: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: Database["public"]["Enums"]["action_type"]
+          card_id?: string | null
+          converted_points?: number | null
+          id?: string
+          processed_at?: string | null
+          requested_at?: string
+          slot_id?: string | null
+          status?: Database["public"]["Enums"]["action_status"]
+          tracking_number?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: Database["public"]["Enums"]["action_type"]
+          card_id?: string | null
+          converted_points?: number | null
+          id?: string
+          processed_at?: string | null
+          requested_at?: string
+          slot_id?: string | null
+          status?: Database["public"]["Enums"]["action_status"]
+          tracking_number?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_actions_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_actions_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "gacha_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          points_balance: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          points_balance?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          points_balance?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_transactions: {
+        Row: {
+          created_at: string
+          gacha_id: string | null
+          id: string
+          play_count: number
+          result_items: Json
+          status: Database["public"]["Enums"]["transaction_status"]
+          total_spent_points: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gacha_id?: string | null
+          id?: string
+          play_count?: number
+          result_items?: Json
+          status?: Database["public"]["Enums"]["transaction_status"]
+          total_spent_points?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gacha_id?: string | null
+          id?: string
+          play_count?: number
+          result_items?: Json
+          status?: Database["public"]["Enums"]["transaction_status"]
+          total_spent_points?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_transactions_gacha_id_fkey"
+            columns: ["gacha_id"]
+            isOneToOne: false
+            referencedRelation: "gacha_masters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      action_status: "pending" | "processing" | "completed" | "shipped"
+      action_type: "shipping" | "conversion"
+      app_role: "admin" | "user"
+      card_rarity: "S" | "A" | "B" | "C" | "D"
+      gacha_status: "draft" | "active" | "sold_out" | "archived"
+      transaction_status: "pending" | "completed" | "error"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +442,13 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      action_status: ["pending", "processing", "completed", "shipped"],
+      action_type: ["shipping", "conversion"],
+      app_role: ["admin", "user"],
+      card_rarity: ["S", "A", "B", "C", "D"],
+      gacha_status: ["draft", "active", "sold_out", "archived"],
+      transaction_status: ["pending", "completed", "error"],
+    },
   },
 } as const
