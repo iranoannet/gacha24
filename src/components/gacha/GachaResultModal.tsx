@@ -78,6 +78,9 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
       setSelections(new Map());
       
       // 1枚ずつ表示するアニメーション
+      // カード枚数に関わらず一定のテンポで表示（10連と同じ速度）
+      const revealInterval = 300; // 常に300ms間隔で表示
+      
       const interval = setInterval(() => {
         setRevealedCount((prev) => {
           if (prev >= drawnCards.length) {
@@ -86,7 +89,7 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
           }
           return prev + 1;
         });
-      }, drawnCards.length > 10 ? 100 : 300);
+      }, revealInterval);
 
       return () => clearInterval(interval);
     }
