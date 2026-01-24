@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
+import GachaDetail from "./pages/GachaDetail";
 import Inventory from "./pages/Inventory";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
@@ -20,6 +21,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/gacha/:id" element={<GachaDetail />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/history" element={<History />} />
           <Route path="/reports" element={<Reports />} />
