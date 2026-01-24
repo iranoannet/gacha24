@@ -51,6 +51,7 @@ const Inventory = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showAddressDialog, setShowAddressDialog] = useState(false);
+  const [isBulkConverting, setIsBulkConverting] = useState(false);
 
   // ユーザーの住所情報を取得
   const { data: userProfile } = useQuery({
@@ -282,6 +283,59 @@ const Inventory = () => {
     },
   });
 
+  // 一括ポイント変換
+  const handleBulkConvert = async () => {
+    if (!unselectedItems || unselectedItems.length === 0) return;
+    
+    setIsBulkConverting(true);
+    try {
+      let totalPoints = 0;
+      
+      // すべてのアイテムをポイント変換
+      for (const item of unselectedItems) {
+        const { error: actionError } = await supabase
+          .from("inventory_actions")
+          .insert({
+            user_id: user!.id,
+            slot_id: item.slotId,
+            card_id: item.cardId,
+            action_type: "conversion",
+            status: "completed",
+            converted_points: item.conversionPoints,
+            processed_at: new Date().toISOString(),
+          });
+        if (actionError) throw actionError;
+        totalPoints += item.conversionPoints;
+      }
+
+      // ポイント一括追加
+      const { data: profile, error: fetchError } = await supabase
+        .from("profiles")
+        .select("points_balance")
+        .eq("user_id", user!.id)
+        .single();
+      if (fetchError) throw fetchError;
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ points_balance: (profile?.points_balance || 0) + totalPoints })
+        .eq("user_id", user!.id);
+      if (updateError) throw updateError;
+
+      queryClient.invalidateQueries({ queryKey: ["inventory-unselected"] });
+      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["user-profile-header"] });
+      toast.success(`${unselectedItems.length}件を一括変換！ ${totalPoints.toLocaleString()}ptを獲得しました`);
+    } catch (error: any) {
+      toast.error("エラー: " + error.message);
+    } finally {
+      setIsBulkConverting(false);
+    }
+  };
+
+  // 一括ポイント合計を計算
+  const totalConversionPoints = unselectedItems?.reduce((sum, item) => sum + item.conversionPoints, 0) || 0;
+
   const renderItemCard = (item: InventoryItem, showActions: boolean = false) => (
     <div
       key={item.id}
@@ -323,19 +377,16 @@ const Inventory = () => {
       {/* アクションボタン */}
       {showActions && (
         <div className="flex flex-col gap-1">
-          {/* ハズレ以外は発送可能 */}
-          {item.prizeTier !== "miss" && (
-            <Button
-              size="sm"
-              variant="default"
-              className="h-8 text-xs"
-              onClick={() => handleRequestShipping(item)}
-              disabled={requestShippingMutation.isPending}
-            >
-              <Truck className="h-3 w-3 mr-1" />
-              発送
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="default"
+            className="h-8 text-xs"
+            onClick={() => handleRequestShipping(item)}
+            disabled={requestShippingMutation.isPending}
+          >
+            <Truck className="h-3 w-3 mr-1" />
+            発送
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -405,8 +456,35 @@ const Inventory = () => {
                 <p className="text-sm">未選択の獲得商品がありません</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {unselectedItems?.map(item => renderItemCard(item, true))}
+              <div className="space-y-4">
+                {/* 一括ポイント変換ボタン */}
+                <div className="bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">一括ポイント変換</p>
+                      <p className="text-xs text-muted-foreground">
+                        {unselectedItems.length}件 → 合計 {totalConversionPoints.toLocaleString()}pt
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleBulkConvert}
+                      disabled={isBulkConverting}
+                      className="bg-gradient-to-r from-primary to-secondary"
+                    >
+                      {isBulkConverting ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Coins className="h-4 w-4 mr-2" />
+                      )}
+                      全てポイント化
+                    </Button>
+                  </div>
+                </div>
+
+                {/* アイテム一覧 */}
+                <div className="space-y-3">
+                  {unselectedItems?.map(item => renderItemCard(item, true))}
+                </div>
               </div>
             )}
           </TabsContent>
