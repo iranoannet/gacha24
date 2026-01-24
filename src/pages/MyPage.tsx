@@ -122,13 +122,13 @@ const MyPage = () => {
         <div className="space-y-1">
           <h3 className="text-sm font-bold text-foreground mb-2">アカウント</h3>
           
-          <MenuItem icon={Ticket} label="クーポン利用" />
-          <MenuItem icon={ShoppingBag} label="購入履歴" />
+          <MenuItem icon={Ticket} label="クーポン利用" onClick={() => navigate("/mypage/coupon")} />
+          <MenuItem icon={ShoppingBag} label="購入履歴" onClick={() => navigate("/history")} />
           <MenuItem icon={MapPin} label="お届け先の登録" onClick={() => navigate("/mypage/address")} />
-          <MenuItem icon={Shield} label="SMS認証" badge="未認証" badgeVariant="warning" />
-          <MenuItem icon={User} label="LINE連携" badge="未連携" badgeVariant="warning" />
-          <MenuItem icon={Mail} label="メールアドレス変更" />
-          <MenuItem icon={Lock} label="パスワード変更" />
+          <MenuItem icon={Shield} label="SMS認証" badge="未認証" badgeVariant="warning" onClick={() => navigate("/mypage/sms-verification")} />
+          <MenuItem icon={User} label="LINE連携" badge="未連携" badgeVariant="warning" onClick={() => navigate("/mypage/line")} />
+          <MenuItem icon={Mail} label="メールアドレス変更" onClick={() => navigate("/mypage/email")} />
+          <MenuItem icon={Lock} label="パスワード変更" onClick={() => navigate("/mypage/password")} />
           {user && (
             <MenuItem icon={LogOut} label="ログアウト" onClick={handleLogout} />
           )}
@@ -137,8 +137,8 @@ const MyPage = () => {
         <div className="space-y-1 mt-6">
           <h3 className="text-sm font-bold text-foreground mb-2">サポート</h3>
           
-          <MenuItem icon={Bell} label="お知らせ" />
-          <MenuItem icon={HelpCircle} label="よくある質問/お問い合わせ" />
+          <MenuItem icon={Bell} label="お知らせ" onClick={() => navigate("/notifications")} />
+          <MenuItem icon={HelpCircle} label="よくある質問/お問い合わせ" onClick={() => navigate("/faq")} />
         </div>
 
         <div className="space-y-1 mt-6">

@@ -16,6 +16,17 @@ import ShippingAddress from "./pages/ShippingAddress";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import LegalNotice from "./pages/LegalNotice";
+import Terms from "./pages/Terms";
+import FAQ from "./pages/FAQ";
+import Notifications from "./pages/Notifications";
+import NotificationDetail from "./pages/NotificationDetail";
+
+// Mypage pages
+import Coupon from "./pages/mypage/Coupon";
+import EmailChange from "./pages/mypage/EmailChange";
+import PasswordChange from "./pages/mypage/PasswordChange";
+import SmsVerification from "./pages/mypage/SmsVerification";
+import LineFriend from "./pages/mypage/LineFriend";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -45,8 +56,17 @@ const App = () => (
             <Route path="/reports" element={<Reports />} />
             <Route path="/mypage" element={<MyPage />} />
             <Route path="/mypage/address" element={<ShippingAddress />} />
+            <Route path="/mypage/coupon" element={<Coupon />} />
+            <Route path="/mypage/email" element={<EmailChange />} />
+            <Route path="/mypage/password" element={<PasswordChange />} />
+            <Route path="/mypage/sms-verification" element={<SmsVerification />} />
+            <Route path="/mypage/line" element={<LineFriend />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/legal" element={<LegalNotice />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/notifications/:id" element={<NotificationDetail />} />
             
             {/* Admin Routes - Protected */}
             <Route path="/admin" element={<AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>} />
