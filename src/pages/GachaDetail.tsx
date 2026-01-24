@@ -1,51 +1,119 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Coins, Share2 } from "lucide-react";
+import { ArrowLeft, Coins, Share2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import gachaCard1 from "@/assets/gacha-card-1.jpg";
-import gachaCard2 from "@/assets/gacha-card-2.jpg";
-import gachaCard3 from "@/assets/gacha-card-3.jpg";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
-// Mock data - カードラインナップ
-const cardLineup = [
-  { id: "1", name: "リザードンex SAR", imageUrl: gachaCard1, rarity: "S", quantity: 1, conversionPoints: 50000 },
-  { id: "2", name: "ピカチュウex SAR", imageUrl: gachaCard2, rarity: "S", quantity: 1, conversionPoints: 30000 },
-  { id: "3", name: "ミュウex SR", imageUrl: gachaCard3, rarity: "A", quantity: 2, conversionPoints: 15000 },
-  { id: "4", name: "ルギア SR", imageUrl: gachaCard1, rarity: "A", quantity: 2, conversionPoints: 12000 },
-  { id: "5", name: "レックウザ AR", imageUrl: gachaCard2, rarity: "B", quantity: 5, conversionPoints: 5000 },
-  { id: "6", name: "ゲンガー AR", imageUrl: gachaCard3, rarity: "B", quantity: 5, conversionPoints: 4000 },
-  { id: "7", name: "カイリュー R", imageUrl: gachaCard1, rarity: "C", quantity: 10, conversionPoints: 1000 },
-  { id: "8", name: "ギャラドス R", imageUrl: gachaCard2, rarity: "C", quantity: 10, conversionPoints: 800 },
-  { id: "9", name: "イーブイ C", imageUrl: gachaCard3, rarity: "D", quantity: 30, conversionPoints: 100 },
-  { id: "10", name: "ピカチュウ C", imageUrl: gachaCard1, rarity: "D", quantity: 34, conversionPoints: 100 },
-];
+type GachaMaster = Database["public"]["Tables"]["gacha_masters"]["Row"];
+type Card = Database["public"]["Tables"]["cards"]["Row"];
+type PrizeTier = Database["public"]["Enums"]["prize_tier"];
 
-// Mock gacha data
-const gachaData = {
-  id: "1",
-  title: "大当たりを待ち構えろ！1等100枚大量封入!!!",
-  subtitle: "1/3の確率で100コイン以上が当たる!!",
-  bannerUrl: gachaCard1,
-  pricePerPlay: 500,
-  totalSlots: 100,
-  remainingSlots: 77,
-  rank: 1,
+const prizeTierStyles: Record<PrizeTier, { bg: string; text: string; glow: string; label: string }> = {
+  S: { bg: "bg-rarity-s", text: "text-foreground", glow: "shadow-[0_0_20px_hsl(var(--rarity-s))]", label: "S賞" },
+  A: { bg: "bg-rarity-a", text: "text-foreground", glow: "shadow-[0_0_15px_hsl(var(--rarity-a))]", label: "A賞" },
+  B: { bg: "bg-rarity-b", text: "text-foreground", glow: "shadow-[0_0_10px_hsl(var(--rarity-b))]", label: "B賞" },
+  miss: { bg: "bg-muted", text: "text-muted-foreground", glow: "", label: "ハズレ" },
 };
 
-const rarityStyles: Record<string, { bg: string; text: string; glow: string }> = {
-  S: { bg: "bg-rarity-s", text: "text-foreground", glow: "shadow-[0_0_20px_hsl(var(--rarity-s))]" },
-  A: { bg: "bg-rarity-a", text: "text-foreground", glow: "shadow-[0_0_15px_hsl(var(--rarity-a))]" },
-  B: { bg: "bg-rarity-b", text: "text-foreground", glow: "shadow-[0_0_10px_hsl(var(--rarity-b))]" },
-  C: { bg: "bg-rarity-c", text: "text-foreground", glow: "" },
-  D: { bg: "bg-rarity-d", text: "text-foreground", glow: "" },
-};
+// 同じカードをグループ化して枚数を集計
+interface GroupedCard {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  prizeTier: PrizeTier;
+  conversionPoints: number;
+  quantity: number;
+}
 
 const GachaDetail = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const soldPercentage = ((gachaData.totalSlots - gachaData.remainingSlots) / gachaData.totalSlots) * 100;
+
+  // ガチャマスタ情報取得
+  const { data: gacha, isLoading: isLoadingGacha } = useQuery({
+    queryKey: ["gacha-detail", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gacha_masters")
+        .select("*")
+        .eq("id", id!)
+        .single();
+      if (error) throw error;
+      return data as GachaMaster;
+    },
+    enabled: !!id,
+  });
+
+  // カードラインナップ取得（未抽選のスロットに紐づくカード）
+  const { data: cards, isLoading: isLoadingCards } = useQuery({
+    queryKey: ["gacha-cards", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cards")
+        .select("*")
+        .eq("gacha_id", id!)
+        .order("prize_tier", { ascending: true });
+      if (error) throw error;
+      return data as Card[];
+    },
+    enabled: !!id,
+  });
+
+  // カードをグループ化（同じ名前・賞のカードをまとめる）
+  const groupedCards: GroupedCard[] = cards
+    ? Object.values(
+        cards.reduce((acc, card) => {
+          const key = `${card.name}-${card.prize_tier}`;
+          if (!acc[key]) {
+            acc[key] = {
+              id: card.id,
+              name: card.name,
+              imageUrl: card.image_url,
+              prizeTier: card.prize_tier,
+              conversionPoints: card.conversion_points,
+              quantity: 0,
+            };
+          }
+          acc[key].quantity++;
+          return acc;
+        }, {} as Record<string, GroupedCard>)
+      )
+        // 賞順にソート（S > A > B > miss）、missは非表示
+        .filter((card) => card.prizeTier !== "miss")
+        .sort((a, b) => {
+          const order = { S: 0, A: 1, B: 2, miss: 3 };
+          return order[a.prizeTier] - order[b.prizeTier];
+        })
+    : [];
+
+  const isLoading = isLoadingGacha || isLoadingCards;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!gacha) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">ガチャが見つかりませんでした</p>
+          <Button onClick={() => navigate(-1)}>戻る</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const soldPercentage = gacha.total_slots > 0
+    ? ((gacha.total_slots - gacha.remaining_slots) / gacha.total_slots) * 100
+    : 0;
 
   const handlePlay = (count: 1 | 10 | 100) => {
     // TODO: ガチャ実行ロジック
@@ -72,24 +140,26 @@ const GachaDetail = () => {
 
       {/* Main Content */}
       <main className="container px-4 py-4">
-        {/* Banner with Rank Badge */}
+        {/* Banner with Title */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="relative rounded-xl overflow-hidden mb-6"
         >
-          <img
-            src={gachaData.bannerUrl}
-            alt={gachaData.title}
-            className="w-full aspect-video object-cover"
-          />
-          {/* Rank Badge */}
-          <div className="absolute top-2 left-1/2 -translate-x-1/2">
-            <div className="relative">
-              <div className="bg-gradient-to-r from-blue-500 via-cyan-400 to-yellow-400 px-6 py-1 rounded-full">
-                <span className="text-white font-black text-lg">{gachaData.rank}位</span>
-              </div>
+          {gacha.banner_url ? (
+            <img
+              src={gacha.banner_url}
+              alt={gacha.title}
+              className="w-full aspect-video object-cover"
+            />
+          ) : (
+            <div className="w-full aspect-video bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+              <span className="text-2xl font-bold text-foreground">{gacha.title}</span>
             </div>
+          )}
+          {/* Title Overlay */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+            <h1 className="text-white font-bold text-lg line-clamp-2">{gacha.title}</h1>
           </div>
         </motion.div>
 
@@ -99,47 +169,57 @@ const GachaDetail = () => {
             カードラインナップ
           </h2>
           
-          <motion.div
-            className="grid grid-cols-2 gap-3"
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: {},
-              visible: {
-                transition: { staggerChildren: 0.05 },
-              },
-            }}
-          >
-            {cardLineup.map((card) => (
-              <motion.div
-                key={card.id}
-                variants={{
-                  hidden: { opacity: 0, scale: 0.9 },
-                  visible: { opacity: 1, scale: 1 },
-                }}
-                className={`relative rounded-lg overflow-hidden bg-card border border-border ${rarityStyles[card.rarity]?.glow || ""}`}
-              >
-                {/* Rarity Badge */}
-                <Badge
-                  className={`absolute top-2 left-2 z-10 ${rarityStyles[card.rarity]?.bg} ${rarityStyles[card.rarity]?.text} font-black text-xs px-2`}
+          {groupedCards.length === 0 ? (
+            <p className="text-center text-muted-foreground">カードが登録されていません</p>
+          ) : (
+            <motion.div
+              className="grid grid-cols-2 gap-3"
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: {},
+                visible: {
+                  transition: { staggerChildren: 0.05 },
+                },
+              }}
+            >
+              {groupedCards.map((card) => (
+                <motion.div
+                  key={card.id}
+                  variants={{
+                    hidden: { opacity: 0, scale: 0.9 },
+                    visible: { opacity: 1, scale: 1 },
+                  }}
+                  className={`relative rounded-lg overflow-hidden bg-card border border-border ${prizeTierStyles[card.prizeTier]?.glow || ""}`}
                 >
-                  {card.rarity}
-                </Badge>
-                
-                {/* Quantity Badge */}
-                <div className="absolute bottom-2 right-2 z-10 bg-foreground/80 text-background text-xs font-bold px-2 py-0.5 rounded">
-                  ×{card.quantity}
-                </div>
-                
-                {/* Card Image */}
-                <img
-                  src={card.imageUrl}
-                  alt={card.name}
-                  className="w-full aspect-[3/4] object-cover"
-                />
-              </motion.div>
-            ))}
-          </motion.div>
+                  {/* Prize Tier Badge */}
+                  <Badge
+                    className={`absolute top-2 left-2 z-10 ${prizeTierStyles[card.prizeTier]?.bg} ${prizeTierStyles[card.prizeTier]?.text} font-black text-xs px-2`}
+                  >
+                    {prizeTierStyles[card.prizeTier]?.label}
+                  </Badge>
+                  
+                  {/* Quantity Badge */}
+                  <div className="absolute bottom-2 right-2 z-10 bg-foreground/80 text-background text-xs font-bold px-2 py-0.5 rounded">
+                    ×{card.quantity}
+                  </div>
+                  
+                  {/* Card Image */}
+                  {card.imageUrl ? (
+                    <img
+                      src={card.imageUrl}
+                      alt={card.name}
+                      className="w-full aspect-[3/4] object-cover"
+                    />
+                  ) : (
+                    <div className="w-full aspect-[3/4] bg-muted flex items-center justify-center p-2">
+                      <span className="text-xs text-muted-foreground text-center line-clamp-3">{card.name}</span>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
         </section>
 
         {/* Gacha Info */}
@@ -150,16 +230,16 @@ const GachaDetail = () => {
               <span className="text-muted-foreground">1回の価格</span>
               <span className="font-bold text-primary flex items-center gap-1">
                 <Coins className="h-4 w-4" />
-                {gachaData.pricePerPlay.toLocaleString()} コイン
+                {gacha.price_per_play.toLocaleString()} コイン
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">総口数</span>
-              <span className="font-bold text-foreground">{gachaData.totalSlots}口</span>
+              <span className="font-bold text-foreground">{gacha.total_slots.toLocaleString()}口</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">残り口数</span>
-              <span className="font-bold text-accent">{gachaData.remainingSlots}口</span>
+              <span className="font-bold text-accent">{gacha.remaining_slots.toLocaleString()}口</span>
             </div>
           </div>
         </section>
@@ -172,11 +252,11 @@ const GachaDetail = () => {
           <div className="flex items-center gap-3 mb-3">
             <div className="flex items-center gap-1 text-sm">
               <span className="text-primary font-bold">🔥</span>
-              <span className="text-muted-foreground">{gachaData.remainingSlots}/{gachaData.totalSlots}</span>
+              <span className="text-muted-foreground">{gacha.remaining_slots.toLocaleString()}/{gacha.total_slots.toLocaleString()}</span>
             </div>
             <Progress value={soldPercentage} className="flex-1 h-2" />
             <span className="text-xs text-muted-foreground whitespace-nowrap">
-              残りわずかお早めに!!
+              {gacha.remaining_slots <= gacha.total_slots * 0.3 ? "残りわずかお早めに!!" : ""}
             </span>
           </div>
           
@@ -185,28 +265,31 @@ const GachaDetail = () => {
             <Button
               className="btn-gacha h-12 text-sm font-bold"
               onClick={() => handlePlay(1)}
+              disabled={gacha.remaining_slots < 1}
             >
               <div className="flex flex-col items-center">
                 <span>1回ガチャ</span>
-                <span className="text-xs opacity-80">{gachaData.pricePerPlay}コイン</span>
+                <span className="text-xs opacity-80">{gacha.price_per_play.toLocaleString()}コイン</span>
               </div>
             </Button>
             <Button
               className="h-12 text-sm font-bold bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white"
               onClick={() => handlePlay(10)}
+              disabled={gacha.remaining_slots < 10}
             >
               <div className="flex flex-col items-center">
                 <span>10連ガチャ</span>
-                <span className="text-xs opacity-80">{(gachaData.pricePerPlay * 10).toLocaleString()}コイン</span>
+                <span className="text-xs opacity-80">{(gacha.price_per_play * 10).toLocaleString()}コイン</span>
               </div>
             </Button>
             <Button
               className="h-12 text-sm font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
               onClick={() => handlePlay(100)}
+              disabled={gacha.remaining_slots < 100}
             >
               <div className="flex flex-col items-center">
                 <span>100連ガチャ</span>
-                <span className="text-xs opacity-80">{(gachaData.pricePerPlay * 100).toLocaleString()}コイン</span>
+                <span className="text-xs opacity-80">{(gacha.price_per_play * 100).toLocaleString()}コイン</span>
               </div>
             </Button>
           </div>
