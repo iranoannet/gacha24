@@ -23,6 +23,7 @@ export type Database = {
           id: string
           image_url: string | null
           name: string
+          prize_tier: Database["public"]["Enums"]["prize_tier"]
           rarity: Database["public"]["Enums"]["card_rarity"]
         }
         Insert: {
@@ -33,6 +34,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           name: string
+          prize_tier?: Database["public"]["Enums"]["prize_tier"]
           rarity?: Database["public"]["Enums"]["card_rarity"]
         }
         Update: {
@@ -43,6 +45,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           name?: string
+          prize_tier?: Database["public"]["Enums"]["prize_tier"]
           rarity?: Database["public"]["Enums"]["card_rarity"]
         }
         Relationships: [
@@ -366,6 +369,7 @@ export type Database = {
       app_role: "admin" | "user"
       card_rarity: "S" | "A" | "B" | "C" | "D"
       gacha_status: "draft" | "active" | "sold_out" | "archived"
+      prize_tier: "S" | "A" | "B" | "miss"
       transaction_status: "pending" | "completed" | "error"
     }
     CompositeTypes: {
@@ -499,6 +503,7 @@ export const Constants = {
       app_role: ["admin", "user"],
       card_rarity: ["S", "A", "B", "C", "D"],
       gacha_status: ["draft", "active", "sold_out", "archived"],
+      prize_tier: ["S", "A", "B", "miss"],
       transaction_status: ["pending", "completed", "error"],
     },
   },
