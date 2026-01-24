@@ -75,11 +75,13 @@ const GachaDetail = () => {
     intensity: IntensityLevel;
     cameraMotion: CameraMotion;
     particleStyle: ParticleStyle;
+    isRainbow: boolean;
   }>({
     colorTheme: "gold",
     intensity: 3,
     cameraMotion: "zoomIn",
     particleStyle: "spark",
+    isRainbow: false,
   });
   
   // 結果データを保持
@@ -476,6 +478,7 @@ const GachaDetail = () => {
         cameraMotion={animParams.cameraMotion}
         particleStyle={animParams.particleStyle}
         playCount={pendingPlayCount}
+        isRainbow={animParams.isRainbow}
       />
 
       {/* Result Modal */}

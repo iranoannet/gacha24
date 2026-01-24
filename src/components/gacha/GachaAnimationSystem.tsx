@@ -2,12 +2,13 @@ import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { useEffect, useState, useMemo } from "react";
 
 // ========== 可変パラメータ型定義 ==========
-export type ColorTheme = "gold" | "red" | "blue" | "purple" | "green" | "neon" | "monochrome";
+export type ColorTheme = "gold" | "red" | "blue" | "purple" | "green" | "neon" | "monochrome" | "rainbow";
 export type IntensityLevel = 1 | 2 | 3 | 4 | 5;
 export type CameraMotion = "zoomIn" | "shake" | "slowPan" | "orbit" | "impactZoom";
-export type ParticleStyle = "spark" | "dust" | "confetti" | "lightning";
+export type ParticleStyle = "spark" | "dust" | "confetti" | "lightning" | "rainbow";
 
 interface GachaAnimationProps {
+  isRainbow?: boolean; // S賞専用レインボー演出
   isPlaying: boolean;
   onComplete: () => void;
   colorTheme: ColorTheme;
@@ -74,7 +75,25 @@ const colorThemes: Record<ColorTheme, {
     gradient: "from-gray-300 via-gray-500 to-gray-700",
     text: "text-gray-400",
   },
+  rainbow: {
+    primary: "rgb(255, 200, 50)",
+    secondary: "rgb(255, 100, 150)",
+    glow: "rgba(255, 200, 50, 0.8)",
+    gradient: "from-red-500 via-yellow-500 to-green-500",
+    text: "text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-yellow-400 to-cyan-400",
+  },
 };
+
+// レインボーカラー配列（7色）
+const RAINBOW_COLORS = [
+  "rgb(255, 0, 0)",     // 赤
+  "rgb(255, 127, 0)",   // オレンジ
+  "rgb(255, 255, 0)",   // 黄
+  "rgb(0, 255, 0)",     // 緑
+  "rgb(0, 255, 255)",   // シアン
+  "rgb(0, 127, 255)",   // 青
+  "rgb(139, 0, 255)",   // 紫
+];
 
 // ========== 強度設定 ==========
 const intensitySettings: Record<IntensityLevel, {
@@ -107,12 +126,23 @@ export function GachaAnimationSystem({
   cameraMotion,
   particleStyle,
   playCount,
+  isRainbow = false,
 }: GachaAnimationProps) {
   const [phase, setPhase] = useState<"intro" | "anticipation" | "result" | "afterglow">("intro");
   const [showFlash, setShowFlash] = useState(false);
+  const [rainbowIndex, setRainbowIndex] = useState(0);
   const theme = colorThemes[colorTheme];
   const settings = intensitySettings[intensity];
   const controls = useAnimation();
+
+  // レインボー色循環（S賞演出用）
+  useEffect(() => {
+    if (!isRainbow || !isPlaying) return;
+    const interval = setInterval(() => {
+      setRainbowIndex((prev) => (prev + 1) % RAINBOW_COLORS.length);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isRainbow, isPlaying]);
 
   // パーティクル生成
   const particles = useMemo(() => {
@@ -282,6 +312,36 @@ export function GachaAnimationSystem({
             }}
           />
         );
+      case "rainbow":
+        // S賞専用レインボーパーティクル
+        const rainbowColor = RAINBOW_COLORS[p.id % RAINBOW_COLORS.length];
+        return (
+          <motion.div
+            key={p.id}
+            className="absolute"
+            style={{
+              width: p.size * 1.5,
+              height: p.size * 1.5,
+              background: rainbowColor,
+              borderRadius: "50%",
+              boxShadow: `0 0 ${p.size * 3}px ${rainbowColor}`,
+            }}
+            initial={{ x: "50%", y: "50%", opacity: 0, scale: 0 }}
+            animate={{
+              x: `${p.x}%`,
+              y: `${p.y}%`,
+              opacity: [0, 1, 1, 0],
+              scale: [0, 1.5, 2, 0],
+              rotate: [0, 180, 360],
+            }}
+            transition={{
+              duration: p.duration * 1.5,
+              delay: p.delay * 0.3,
+              repeat: Infinity,
+              repeatDelay: 0.2,
+            }}
+          />
+        );
     }
   };
 
@@ -296,7 +356,7 @@ export function GachaAnimationSystem({
         className="fixed inset-0 z-[110] overflow-hidden"
         style={{ background: "linear-gradient(to bottom, #0a0a0a, #1a1a2e)" }}
       >
-        {/* フラッシュエフェクト */}
+        {/* フラッシュエフェクト（レインボー対応） */}
         <AnimatePresence>
           {showFlash && (
             <motion.div
@@ -304,10 +364,27 @@ export function GachaAnimationSystem({
               animate={{ opacity: settings.glowStrength }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 z-50"
-              style={{ background: theme.primary }}
+              style={{ 
+                background: isRainbow 
+                  ? `linear-gradient(135deg, ${RAINBOW_COLORS.join(", ")})`
+                  : theme.primary 
+              }}
             />
           )}
         </AnimatePresence>
+
+        {/* レインボー背景グロー（S賞専用） */}
+        {isRainbow && (phase === "result" || phase === "afterglow") && (
+          <motion.div
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.6 }}
+            style={{
+              background: `conic-gradient(from ${rainbowIndex * 51}deg at 50% 50%, ${RAINBOW_COLORS.join(", ")}, ${RAINBOW_COLORS[0]})`,
+              filter: "blur(60px)",
+            }}
+          />
+        )}
 
         {/* 背景グロー */}
         <motion.div
@@ -317,12 +394,41 @@ export function GachaAnimationSystem({
           }}
           transition={{ duration: 0.5 }}
           style={{
-            background: `radial-gradient(circle at center, ${theme.glow} 0%, transparent 60%)`,
+            background: isRainbow && phase === "result"
+              ? `radial-gradient(circle at center, ${RAINBOW_COLORS[rainbowIndex]} 0%, transparent 60%)`
+              : `radial-gradient(circle at center, ${theme.glow} 0%, transparent 60%)`,
           }}
         />
 
+        {/* レインボーリング（S賞専用） */}
+        {isRainbow && (phase === "anticipation" || phase === "result" || phase === "afterglow") && (
+          <>
+            {RAINBOW_COLORS.map((color, i) => (
+              <motion.div
+                key={`rainbow-ring-${i}`}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{
+                  width: 280 + i * 40,
+                  height: 280 + i * 40,
+                  border: `3px solid ${color}`,
+                  boxShadow: `0 0 20px ${color}, inset 0 0 20px ${color}`,
+                  opacity: phase === "result" ? 0.8 : 0.4,
+                }}
+                animate={{
+                  rotate: i % 2 === 0 ? 360 : -360,
+                  scale: phase === "result" ? [1, 1.1, 1] : 1,
+                }}
+                transition={{
+                  rotate: { duration: 3 + i * 0.5, repeat: Infinity, ease: "linear" },
+                  scale: { duration: 0.5, repeat: Infinity, repeatType: "reverse" },
+                }}
+              />
+            ))}
+          </>
+        )}
+
         {/* 回転リング（期待煽り） */}
-        {(phase === "anticipation" || phase === "result") && (
+        {!isRainbow && (phase === "anticipation" || phase === "result") && (
           <>
             <motion.div
               className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
@@ -377,45 +483,76 @@ export function GachaAnimationSystem({
               repeat: phase === "anticipation" ? Infinity : 0,
             }}
           >
-            {/* グロー効果 */}
-            <motion.div
-              className={`absolute inset-0 rounded-full blur-3xl bg-gradient-to-br ${theme.gradient}`}
-              animate={{
-                opacity: phase === "intro" ? 0.3 : phase === "result" ? settings.glowStrength : 0.5,
-                scale: phase === "result" ? 1.5 : 1,
-              }}
-              style={{ width: 200, height: 200, margin: -25 }}
-            />
+            {/* グロー効果（レインボー対応） */}
+            {isRainbow ? (
+              <motion.div
+                className="absolute inset-0 rounded-full blur-3xl"
+                animate={{
+                  opacity: phase === "intro" ? 0.4 : phase === "result" ? 1 : 0.6,
+                  scale: phase === "result" ? 1.8 : 1,
+                }}
+                style={{ 
+                  width: 200, 
+                  height: 200, 
+                  margin: -25,
+                  background: `conic-gradient(from ${rainbowIndex * 51}deg, ${RAINBOW_COLORS.join(", ")}, ${RAINBOW_COLORS[0]})`,
+                }}
+              />
+            ) : (
+              <motion.div
+                className={`absolute inset-0 rounded-full blur-3xl bg-gradient-to-br ${theme.gradient}`}
+                animate={{
+                  opacity: phase === "intro" ? 0.3 : phase === "result" ? settings.glowStrength : 0.5,
+                  scale: phase === "result" ? 1.5 : 1,
+                }}
+                style={{ width: 200, height: 200, margin: -25 }}
+              />
+            )}
 
-            {/* カプセル本体 */}
+            {/* カプセル本体（レインボー対応） */}
             <motion.div
-              className={`relative w-36 h-36 rounded-full bg-gradient-to-br ${theme.gradient} flex items-center justify-center overflow-hidden`}
+              className="relative w-36 h-36 rounded-full flex items-center justify-center overflow-hidden"
               style={{
-                boxShadow: `0 0 ${30 * settings.glowStrength}px ${theme.glow}, inset 0 -20px 40px rgba(0,0,0,0.3)`,
+                background: isRainbow 
+                  ? `conic-gradient(from ${rainbowIndex * 51}deg, ${RAINBOW_COLORS.join(", ")}, ${RAINBOW_COLORS[0]})`
+                  : undefined,
+                boxShadow: isRainbow
+                  ? `0 0 50px ${RAINBOW_COLORS[rainbowIndex]}, 0 0 100px ${RAINBOW_COLORS[(rainbowIndex + 2) % 7]}, inset 0 -20px 40px rgba(0,0,0,0.3)`
+                  : `0 0 ${30 * settings.glowStrength}px ${theme.glow}, inset 0 -20px 40px rgba(0,0,0,0.3)`,
               }}
             >
+              {/* 通常時のグラデーション背景 */}
+              {!isRainbow && (
+                <div className={`absolute inset-0 bg-gradient-to-br ${theme.gradient}`} />
+              )}
+              
               {/* 光沢 */}
               <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent skew-x-12"
                 animate={{ x: ["-200%", "200%"] }}
                 transition={{
-                  duration: 1.5,
+                  duration: isRainbow ? 0.8 : 1.5,
                   repeat: Infinity,
-                  repeatDelay: phase === "result" ? 0 : 2,
+                  repeatDelay: phase === "result" ? 0 : isRainbow ? 0.2 : 2,
                 }}
               />
               
               {/* 上部ハイライト */}
-              <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent rounded-t-full" />
+              <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/40 to-transparent rounded-t-full" />
               
               {/* 中央ライン */}
-              <div className="absolute left-0 right-0 h-2 bg-gradient-to-r from-gray-800 via-gray-600 to-gray-800 top-1/2 -translate-y-1/2" />
+              <div className="absolute left-0 right-0 h-2 bg-gradient-to-r from-gray-800 via-gray-500 to-gray-800 top-1/2 -translate-y-1/2" />
               
               {/* プレイ回数 */}
               <motion.span
                 className="relative z-10 text-3xl font-black text-white drop-shadow-lg"
-                animate={{ scale: phase === "result" ? [1, 1.2, 1] : 1 }}
+                animate={{ 
+                  scale: phase === "result" ? [1, 1.3, 1] : 1,
+                }}
                 transition={{ duration: 0.3 }}
+                style={{
+                  textShadow: isRainbow ? `0 0 20px ${RAINBOW_COLORS[rainbowIndex]}` : undefined,
+                }}
               >
                 ×{playCount}
               </motion.span>
@@ -444,12 +581,15 @@ export function GachaAnimationSystem({
                 initial={{ opacity: 0, scale: 0.5 }}
                 animate={{ opacity: 1, scale: [1, 1.1, 1] }}
                 exit={{ opacity: 0 }}
-                className={`text-4xl font-black ${theme.text}`}
+                className={`text-4xl font-black ${isRainbow ? "" : theme.text}`}
                 style={{
-                  textShadow: `0 0 20px ${theme.glow}, 0 0 40px ${theme.glow}`,
+                  textShadow: isRainbow 
+                    ? `0 0 20px ${RAINBOW_COLORS[rainbowIndex]}, 0 0 40px ${RAINBOW_COLORS[(rainbowIndex + 3) % 7]}, 0 0 60px ${RAINBOW_COLORS[(rainbowIndex + 5) % 7]}`
+                    : `0 0 20px ${theme.glow}, 0 0 40px ${theme.glow}`,
+                  color: isRainbow ? RAINBOW_COLORS[rainbowIndex] : undefined,
                 }}
               >
-                {intensity === 5 ? "!?" : "!"}
+                {isRainbow ? "★S★" : intensity === 5 ? "!?" : "!"}
               </motion.p>
             )}
             {phase === "afterglow" && (
@@ -478,14 +618,15 @@ export function GachaAnimationSystem({
 export function getAnimationParamsForPrizeTier(
   prizeTier: string,
   playCount: number
-): { colorTheme: ColorTheme; intensity: IntensityLevel; cameraMotion: CameraMotion; particleStyle: ParticleStyle } {
+): { colorTheme: ColorTheme; intensity: IntensityLevel; cameraMotion: CameraMotion; particleStyle: ParticleStyle; isRainbow: boolean } {
   switch (prizeTier) {
     case "S":
       return {
-        colorTheme: "gold",
+        colorTheme: "rainbow",
         intensity: 5,
         cameraMotion: "impactZoom",
-        particleStyle: playCount >= 10 ? "confetti" : "spark",
+        particleStyle: "rainbow",
+        isRainbow: true,
       };
     case "A":
       return {
@@ -493,6 +634,7 @@ export function getAnimationParamsForPrizeTier(
         intensity: 4,
         cameraMotion: "shake",
         particleStyle: "spark",
+        isRainbow: false,
       };
     case "B":
       return {
@@ -500,6 +642,7 @@ export function getAnimationParamsForPrizeTier(
         intensity: 3,
         cameraMotion: "zoomIn",
         particleStyle: "dust",
+        isRainbow: false,
       };
     default: // miss
       return {
@@ -507,6 +650,7 @@ export function getAnimationParamsForPrizeTier(
         intensity: 1,
         cameraMotion: "slowPan",
         particleStyle: "dust",
+        isRainbow: false,
       };
   }
 }
