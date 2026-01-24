@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import MainLayout from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,22 +18,53 @@ import {
   BookOpen
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 const MyPage = () => {
+  const navigate = useNavigate();
+  const { user, loading, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    toast.success("ログアウトしました");
+    navigate("/");
+  };
+
+  const handleUserCardClick = () => {
+    if (!user) {
+      navigate("/auth");
+    }
+  };
+
   return (
     <MainLayout>
       <div className="container px-4 py-6 max-w-2xl mx-auto">
         <h1 className="text-xl font-bold mb-4">マイページ</h1>
 
         {/* User Profile Card */}
-        <Card className="p-4 mb-4">
+        <Card 
+          className="p-4 mb-4 cursor-pointer hover:bg-muted/50 transition-colors"
+          onClick={handleUserCardClick}
+        >
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
               <User className="h-6 w-6 text-muted-foreground" />
             </div>
             <div className="flex-1">
-              <p className="font-medium text-foreground">ゲストユーザー</p>
-              <p className="text-xs text-muted-foreground">ログインしてください</p>
+              {loading ? (
+                <p className="text-sm text-muted-foreground">読み込み中...</p>
+              ) : user ? (
+                <>
+                  <p className="font-medium text-foreground">{user.email}</p>
+                  <p className="text-xs text-muted-foreground">ログイン中</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium text-foreground">ゲストユーザー</p>
+                  <p className="text-xs text-muted-foreground">ログインしてください</p>
+                </>
+              )}
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </div>
@@ -97,7 +129,9 @@ const MyPage = () => {
           <MenuItem icon={User} label="LINE連携" badge="未連携" badgeVariant="warning" />
           <MenuItem icon={Mail} label="メールアドレス変更" />
           <MenuItem icon={Lock} label="パスワード変更" />
-          <MenuItem icon={LogOut} label="ログアウト" />
+          {user && (
+            <MenuItem icon={LogOut} label="ログアウト" onClick={handleLogout} />
+          )}
         </div>
 
         <div className="space-y-1 mt-6">
@@ -124,11 +158,15 @@ interface MenuItemProps {
   label: string;
   badge?: string;
   badgeVariant?: "warning" | "success";
+  onClick?: () => void;
 }
 
-const MenuItem = ({ icon: Icon, label, badge, badgeVariant }: MenuItemProps) => {
+const MenuItem = ({ icon: Icon, label, badge, badgeVariant, onClick }: MenuItemProps) => {
   return (
-    <button className="w-full flex items-center gap-3 p-3 hover:bg-muted rounded-lg transition-colors">
+    <button 
+      className="w-full flex items-center gap-3 p-3 hover:bg-muted rounded-lg transition-colors"
+      onClick={onClick}
+    >
       <Icon className="h-4 w-4 text-muted-foreground" />
       <span className="flex-1 text-sm text-foreground text-left">{label}</span>
       {badge && (
