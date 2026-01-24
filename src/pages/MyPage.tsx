@@ -144,9 +144,9 @@ const MyPage = () => {
         <div className="space-y-1 mt-6">
           <h3 className="text-sm font-bold text-foreground mb-2">その他</h3>
           
-          <MenuItem icon={FileText} label="利用規約" />
-          <MenuItem icon={BookOpen} label="プライバシーポリシー" />
-          <MenuItem icon={FileText} label="特定商取引法に基づく表記" />
+          <MenuItem icon={FileText} label="利用規約" onClick={() => navigate("/terms")} />
+          <MenuItem icon={BookOpen} label="プライバシーポリシー" onClick={() => navigate("/privacy")} />
+          <MenuItem icon={FileText} label="特定商取引法に基づく表記" onClick={() => navigate("/legal")} />
         </div>
       </div>
     </MainLayout>
