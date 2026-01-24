@@ -75,7 +75,9 @@ export default function CardMaster() {
     },
   });
 
-  // ページネーション付きでカード取得
+  // ページネーション付きでカード取得（検索・フィルタ実行時のみ）
+  const [isSearchTriggered, setIsSearchTriggered] = useState(false);
+  
   const { data: cardsData, isLoading, isFetching } = useQuery({
     queryKey: ["master-cards", filterCategory, searchQuery, currentPage],
     queryFn: async () => {
@@ -105,6 +107,7 @@ export default function CardMaster() {
       return { cards: data, totalCount: count || 0 };
     },
     placeholderData: (prev) => prev,
+    enabled: isSearchTriggered, // 検索実行時のみ有効
   });
 
   const cards = cardsData?.cards || [];
@@ -115,6 +118,14 @@ export default function CardMaster() {
   const handleSearch = () => {
     setSearchQuery(searchInput);
     setCurrentPage(0);
+    setIsSearchTriggered(true);
+  };
+  
+  // カテゴリ変更時
+  const handleCategoryChange = (value: CardCategory | "all") => {
+    setFilterCategory(value);
+    setCurrentPage(0);
+    setIsSearchTriggered(true);
   };
 
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
@@ -487,10 +498,7 @@ export default function CardMaster() {
               </div>
               <Select
                 value={filterCategory}
-                onValueChange={(value: CardCategory | "all") => {
-                  setFilterCategory(value);
-                  setCurrentPage(0);
-                }}
+                onValueChange={handleCategoryChange}
               >
                 <SelectTrigger className="w-48">
                   <SelectValue />
@@ -505,100 +513,109 @@ export default function CardMaster() {
               </Select>
             </div>
 
-            {/* 件数表示 */}
-            <div className="flex justify-between items-center mb-4 text-sm text-muted-foreground">
-              <span>
-                {totalCount.toLocaleString()}件中 {currentPage * PAGE_SIZE + 1}〜{Math.min((currentPage + 1) * PAGE_SIZE, totalCount)}件を表示
-                {isFetching && " (読み込み中...)"}
-              </span>
-              {totalPages > 1 && (
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage === 0}
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                  >
-                    前へ
-                  </Button>
-                  <span className="py-1 px-2">{currentPage + 1} / {totalPages}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage >= totalPages - 1}
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                  >
-                    次へ
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {isLoading ? (
-              <p className="text-muted-foreground">読み込み中...</p>
-            ) : cards.length === 0 ? (
-              <p className="text-muted-foreground">
-                {totalCount === 0 
-                  ? "商品がありません。CSVからインポートしてください。" 
-                  : "条件に一致する商品がありません。"}
+            {/* 件数表示・検索プロンプト */}
+            {!isSearchTriggered ? (
+              <p className="text-muted-foreground mb-4">
+                検索またはカテゴリを選択してデータを表示してください。
               </p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>画像</TableHead>
-                    <TableHead>商品名</TableHead>
-                    <TableHead>カテゴリ</TableHead>
-                    <TableHead>ポイント</TableHead>
-                    <TableHead>登録日</TableHead>
-                    <TableHead className="text-right">操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cards.map((card) => (
-                    <TableRow key={card.id}>
-                      <TableCell>
-                        {card.image_url ? (
-                          <img
-                            src={card.image_url}
-                            alt={card.name}
-                            className="w-12 h-12 object-cover rounded"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 bg-muted rounded flex items-center justify-center">
-                            <Package className="w-6 h-6 text-muted-foreground" />
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">{card.name}</TableCell>
-                      <TableCell>
-                        {(card as any).category ? (
-                          <Badge variant="outline">{CATEGORY_LABELS[(card as any).category as CardCategory]}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">未設定</span>
-                        )}
-                      </TableCell>
-                      <TableCell>{card.conversion_points.toLocaleString()}pt</TableCell>
-                      <TableCell>
-                        {new Date(card.created_at).toLocaleDateString("ja-JP")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            if (confirm("本当に削除しますか？")) {
-                              deleteMutation.mutate(card.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <>
+                {/* 件数表示 */}
+                <div className="flex justify-between items-center mb-4 text-sm text-muted-foreground">
+                  <span>
+                    {totalCount === 0 
+                      ? "0件" 
+                      : `${totalCount.toLocaleString()}件中 ${currentPage * PAGE_SIZE + 1}〜${Math.min((currentPage + 1) * PAGE_SIZE, totalCount)}件を表示`}
+                    {isFetching && " (読み込み中...)"}
+                  </span>
+                  {totalPages > 1 && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 0}
+                        onClick={() => setCurrentPage(currentPage - 1)}
+                      >
+                        前へ
+                      </Button>
+                      <span className="py-1 px-2">{currentPage + 1} / {totalPages}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage >= totalPages - 1}
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                      >
+                        次へ
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {isLoading ? (
+                  <p className="text-muted-foreground">読み込み中...</p>
+                ) : cards.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    条件に一致する商品がありません。
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>画像</TableHead>
+                        <TableHead>商品名</TableHead>
+                        <TableHead>カテゴリ</TableHead>
+                        <TableHead>ポイント</TableHead>
+                        <TableHead>登録日</TableHead>
+                        <TableHead className="text-right">操作</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cards.map((card) => (
+                        <TableRow key={card.id}>
+                          <TableCell>
+                            {card.image_url ? (
+                              <img
+                                src={card.image_url}
+                                alt={card.name}
+                                className="w-12 h-12 object-cover rounded"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 bg-muted rounded flex items-center justify-center">
+                                <Package className="w-6 h-6 text-muted-foreground" />
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">{card.name}</TableCell>
+                          <TableCell>
+                            {(card as any).category ? (
+                              <Badge variant="outline">{CATEGORY_LABELS[(card as any).category as CardCategory]}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">未設定</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{card.conversion_points.toLocaleString()}pt</TableCell>
+                          <TableCell>
+                            {new Date(card.created_at).toLocaleDateString("ja-JP")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                if (confirm("本当に削除しますか？")) {
+                                  deleteMutation.mutate(card.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
