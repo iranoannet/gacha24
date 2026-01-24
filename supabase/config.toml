@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.create-gacha-slots]
 verify_jwt = false
+
+[functions.play-gacha]
+verify_jwt = false
