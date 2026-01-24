@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Upload, X, ArrowRight, ArrowLeft } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, X, ArrowRight, ArrowLeft, Search } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -38,6 +38,14 @@ type GachaStatus = Database["public"]["Enums"]["gacha_status"];
 type CardRow = Database["public"]["Tables"]["cards"]["Row"];
 
 type PrizeTier = "S" | "A" | "B" | "miss";
+type CardCategory = "yugioh" | "pokemon" | "weiss" | "onepiece";
+
+const CATEGORY_LABELS: Record<CardCategory, string> = {
+  yugioh: "遊戯王",
+  pokemon: "ポケモン",
+  weiss: "ヴァイスシュバルツ",
+  onepiece: "ワンピース",
+};
 
 interface SelectedCardItem {
   card: CardRow;
@@ -53,6 +61,8 @@ export default function GachaManagement() {
   const [selectedItems, setSelectedItems] = useState<SelectedCardItem[]>([]);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<CardCategory | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
@@ -62,6 +72,7 @@ export default function GachaManagement() {
     banner_url: "",
     pop_image_url: "",
     status: "draft" as GachaStatus,
+    category: null as CardCategory | null,
   });
 
   // ガチャ一覧
@@ -89,6 +100,19 @@ export default function GachaManagement() {
       if (error) throw error;
       return data;
     },
+  });
+
+  // カテゴリと検索でフィルタリング
+  const filteredCards = (availableCards || []).filter((card) => {
+    // カテゴリフィルタ（選択されている場合のみ）
+    if (selectedCategory && (card as any).category !== selectedCategory) {
+      return false;
+    }
+    // 検索フィルタ
+    if (searchQuery && !card.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    return true;
   });
 
   const createMutation = useMutation({
@@ -217,11 +241,14 @@ export default function GachaManagement() {
       banner_url: "",
       pop_image_url: "",
       status: "draft",
+      category: null,
     });
     setSelectedItems([]);
     setBannerFile(null);
     setBannerPreview(null);
     setCreateStep("select");
+    setSearchQuery("");
+    setSelectedCategory(null);
   };
 
   const handleEdit = (gacha: GachaMaster) => {
@@ -233,6 +260,7 @@ export default function GachaManagement() {
       banner_url: gacha.banner_url || "",
       pop_image_url: gacha.pop_image_url || "",
       status: gacha.status,
+      category: (gacha as any).category || null,
     });
     setBannerFile(null);
     setBannerPreview(gacha.banner_url || null);
@@ -350,13 +378,36 @@ export default function GachaManagement() {
             
             {createStep === "select" ? (
               <div className="space-y-6">
+                {/* カテゴリ選択 */}
+                <div className="space-y-2">
+                  <Label>カテゴリを選択（必須）</Label>
+                  <Select
+                    value={selectedCategory || ""}
+                    onValueChange={(value: CardCategory) => {
+                      setSelectedCategory(value);
+                      setFormData({ ...formData, category: value });
+                      setSelectedItems([]); // カテゴリ変更時は選択をリセット
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="カテゴリを選択してください" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yugioh">遊戯王</SelectItem>
+                      <SelectItem value="pokemon">ポケモン</SelectItem>
+                      <SelectItem value="weiss">ヴァイスシュバルツ</SelectItem>
+                      <SelectItem value="onepiece">ワンピース</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* 選択済み商品サマリー */}
                 <div className="bg-muted/50 rounded-lg p-4">
                   <div className="flex justify-between items-center">
                     <span className="font-medium">選択済み: {selectedItems.length}種類 / 合計{getTotalSlots()}枚</span>
                     <Button
                       onClick={() => setCreateStep("configure")}
-                      disabled={selectedItems.length === 0}
+                      disabled={selectedItems.length === 0 || !selectedCategory}
                       className="gap-2"
                     >
                       次へ
@@ -365,12 +416,29 @@ export default function GachaManagement() {
                   </div>
                 </div>
 
+                {/* 検索窓 */}
+                {selectedCategory && (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="商品名で検索..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                )}
+
                 {/* 商品選択リスト */}
                 <div className="space-y-4">
                   <h3 className="font-semibold">商品マスタから選択</h3>
-                  {availableCards?.length === 0 ? (
+                  {!selectedCategory ? (
                     <p className="text-sm text-muted-foreground">
-                      利用可能な商品がありません。先に商品マスタからインポートしてください。
+                      まずカテゴリを選択してください。
+                    </p>
+                  ) : filteredCards.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {searchQuery ? "検索結果がありません。" : "このカテゴリに商品がありません。商品マスタからインポートしてください。"}
                     </p>
                   ) : (
                     <div className="border rounded-lg max-h-80 overflow-y-auto">
@@ -383,7 +451,7 @@ export default function GachaManagement() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {availableCards?.map((card) => {
+                          {filteredCards.map((card) => {
                             const isSelected = selectedItems.some(item => item.card.id === card.id);
                             return (
                               <TableRow key={card.id} className={isSelected ? "bg-muted/50" : ""}>
