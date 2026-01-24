@@ -20,6 +20,7 @@ import Terms from "./pages/Terms";
 import FAQ from "./pages/FAQ";
 import Notifications from "./pages/Notifications";
 import NotificationDetail from "./pages/NotificationDetail";
+import Points from "./pages/Points";
 
 // Mypage pages
 import Coupon from "./pages/mypage/Coupon";
@@ -68,6 +69,7 @@ const App = () => (
             <Route path="/faq" element={<FAQ />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/notifications/:id" element={<NotificationDetail />} />
+            <Route path="/points" element={<Points />} />
             
             {/* Admin Routes - Protected */}
             <Route path="/admin" element={<AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>} />
