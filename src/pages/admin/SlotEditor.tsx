@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Shuffle, Lock, Unlock, Save, Plus, Edit2, ArrowUp, ArrowDown } from "lucide-react";
+import { Shuffle, Lock, Unlock, Save, Plus, Edit2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -57,6 +57,7 @@ export default function SlotEditor() {
   const [editingSlot, setEditingSlot] = useState<SlotWithCard | null>(null);
   const [lockedSlots, setLockedSlots] = useState<Set<string>>(new Set());
   const [drawMode, setDrawMode] = useState<"random" | "ordered">("random");
+  const [slotNumberEdits, setSlotNumberEdits] = useState<Record<string, number>>({});
   const [newCard, setNewCard] = useState({
     name: "",
     rarity: "C" as CardRarity,
@@ -107,15 +108,32 @@ export default function SlotEditor() {
     enabled: !!selectedGachaId,
   });
 
-  // Sort slots by points (high to low) for display
+  // Sort slots by points (high to low) for display - used in both modes
   const sortedSlots = slots ? [...slots].sort((a, b) => {
     const pointsA = a.cards?.conversion_points || 0;
     const pointsB = b.cards?.conversion_points || 0;
     return pointsB - pointsA;
   }) : [];
 
+  // Initialize slot number edits when slots load
+  useEffect(() => {
+    if (slots) {
+      const edits: Record<string, number> = {};
+      slots.forEach(slot => {
+        edits[slot.id] = slot.slot_number;
+      });
+      setSlotNumberEdits(edits);
+    }
+  }, [slots]);
+
+  const selectedGacha = gachas?.find((g) => g.id === selectedGachaId);
+  const isGachaActive = selectedGacha?.status === "active";
+
   const addCardMutation = useMutation({
     mutationFn: async (cardData: typeof newCard) => {
+      if (isGachaActive) {
+        throw new Error("公開中のガチャにはカードを追加できません");
+      }
       const { error } = await supabase.from("cards").insert({
         gacha_id: selectedGachaId,
         name: cardData.name,
@@ -130,6 +148,21 @@ export default function SlotEditor() {
       setIsAddCardOpen(false);
       setNewCard({ name: "", rarity: "C", image_url: "", conversion_points: 0, quantity: 1 });
       toast.success("カードを追加しました");
+    },
+    onError: (error) => toast.error("エラー: " + error.message),
+  });
+
+  const updateSlotNumberMutation = useMutation({
+    mutationFn: async ({ slotId, newSlotNumber }: { slotId: string; newSlotNumber: number }) => {
+      const { error } = await supabase
+        .from("gacha_slots")
+        .update({ slot_number: newSlotNumber })
+        .eq("id", slotId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchSlots();
+      toast.success("スロット番号を更新しました");
     },
     onError: (error) => toast.error("エラー: " + error.message),
   });
@@ -150,27 +183,17 @@ export default function SlotEditor() {
     onError: (error) => toast.error("エラー: " + error.message),
   });
 
-  const swapSlotsMutation = useMutation({
-    mutationFn: async ({ slot1, slot2 }: { slot1: SlotWithCard; slot2: SlotWithCard }) => {
-      // Swap card_ids between two slots
-      const { error: error1 } = await supabase
-        .from("gacha_slots")
-        .update({ card_id: slot2.card_id })
-        .eq("id", slot1.id);
-      if (error1) throw error1;
+  const handleSlotNumberChange = (slotId: string, value: string) => {
+    const num = parseInt(value) || 0;
+    setSlotNumberEdits(prev => ({ ...prev, [slotId]: num }));
+  };
 
-      const { error: error2 } = await supabase
-        .from("gacha_slots")
-        .update({ card_id: slot1.card_id })
-        .eq("id", slot2.id);
-      if (error2) throw error2;
-    },
-    onSuccess: () => {
-      refetchSlots();
-      toast.success("スロットを入れ替えました");
-    },
-    onError: (error) => toast.error("エラー: " + error.message),
-  });
+  const handleSlotNumberBlur = (slot: SlotWithCard) => {
+    const newNumber = slotNumberEdits[slot.id];
+    if (newNumber !== slot.slot_number && newNumber > 0 && !slot.is_drawn) {
+      updateSlotNumberMutation.mutate({ slotId: slot.id, newSlotNumber: newNumber });
+    }
+  };
 
   const generateSlotsMutation = useMutation({
     mutationFn: async () => {
@@ -260,24 +283,6 @@ export default function SlotEditor() {
     });
   };
 
-  const moveSlot = (slot: SlotWithCard, direction: "up" | "down") => {
-    if (!slots) return;
-    const currentIndex = slots.findIndex(s => s.id === slot.id);
-    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    
-    if (targetIndex < 0 || targetIndex >= slots.length) return;
-    
-    const targetSlot = slots[targetIndex];
-    if (targetSlot.is_drawn || slot.is_drawn) {
-      toast.error("排出済みのスロットは移動できません");
-      return;
-    }
-    
-    swapSlotsMutation.mutate({ slot1: slot, slot2: targetSlot });
-  };
-
-  const selectedGacha = gachas?.find((g) => g.id === selectedGachaId);
-
   return (
     <AdminLayout title="スロット編集（排出順設定）">
       <div className="space-y-6">
@@ -309,7 +314,12 @@ export default function SlotEditor() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>カードラインナップ ({cards?.length || 0}種類)</CardTitle>
-                <Button size="sm" onClick={() => setIsAddCardOpen(true)}>
+                <Button 
+                  size="sm" 
+                  onClick={() => setIsAddCardOpen(true)}
+                  disabled={isGachaActive}
+                  title={isGachaActive ? "公開中のガチャにはカードを追加できません" : ""}
+                >
                   <Plus className="w-4 h-4 mr-1" />
                   カード追加
                 </Button>
@@ -350,9 +360,14 @@ export default function SlotEditor() {
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
                     {drawMode === "random" 
-                      ? "ランダムに排出されます。" 
-                      : "スロット番号順に排出されます。ロックしたスロットはランダム生成時に保持されます。"}
+                      ? "ランダムに排出されます。ポイントの高い順で表示。" 
+                      : "スロット番号の小さい順に排出されます。番号を直接編集して排出順を設定できます。"}
                   </p>
+                  {isGachaActive && (
+                    <p className="text-sm text-destructive mt-1">
+                      ※ 公開中のガチャのためカード追加・ランダム生成は無効です
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <div className="flex border rounded-lg overflow-hidden">
@@ -376,7 +391,8 @@ export default function SlotEditor() {
                   <Button
                     variant="outline"
                     onClick={() => generateSlotsMutation.mutate()}
-                    disabled={!cards?.length || generateSlotsMutation.isPending}
+                    disabled={!cards?.length || generateSlotsMutation.isPending || isGachaActive}
+                    title={isGachaActive ? "公開中のガチャでは使用できません" : ""}
                   >
                     <Shuffle className="w-4 h-4 mr-1" />
                     {generateSlotsMutation.isPending ? "生成中..." : "ランダム生成"}
@@ -402,47 +418,32 @@ export default function SlotEditor() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          {drawMode === "ordered" && <TableHead className="w-16">順番</TableHead>}
-                          {drawMode === "ordered" && <TableHead className="w-20">スロット#</TableHead>}
+                          {drawMode === "ordered" && <TableHead className="w-24">スロット番号</TableHead>}
                           <TableHead>カード</TableHead>
                           <TableHead>レアリティ</TableHead>
                           <TableHead>還元pt</TableHead>
                           <TableHead>状態</TableHead>
-                          {drawMode === "ordered" && <TableHead className="w-40">操作</TableHead>}
+                          {drawMode === "ordered" && <TableHead className="w-32">操作</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {(drawMode === "random" ? sortedSlots : slots)?.slice(0, 100).map((slot, index) => (
+                        {sortedSlots.slice(0, 100).map((slot) => (
                           <TableRow 
                             key={slot.id}
                             className={drawMode === "ordered" && lockedSlots.has(slot.id) ? "bg-amber-50 dark:bg-amber-950/30" : ""}
                           >
                             {drawMode === "ordered" && (
                               <TableCell>
-                                <div className="flex flex-col gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    disabled={index === 0 || slot.is_drawn}
-                                    onClick={() => moveSlot(slot, "up")}
-                                  >
-                                    <ArrowUp className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    disabled={index === (slots?.length || 0) - 1 || slot.is_drawn}
-                                    onClick={() => moveSlot(slot, "down")}
-                                  >
-                                    <ArrowDown className="w-3 h-3" />
-                                  </Button>
-                                </div>
+                                <Input
+                                  type="number"
+                                  className="w-20 font-mono text-center"
+                                  value={slotNumberEdits[slot.id] ?? slot.slot_number}
+                                  onChange={(e) => handleSlotNumberChange(slot.id, e.target.value)}
+                                  onBlur={() => handleSlotNumberBlur(slot)}
+                                  disabled={slot.is_drawn}
+                                  min={1}
+                                />
                               </TableCell>
-                            )}
-                            {drawMode === "ordered" && (
-                              <TableCell className="font-mono font-bold">{slot.slot_number}</TableCell>
                             )}
                             <TableCell className="flex items-center gap-2">
                               {slot.cards?.image_url && (
