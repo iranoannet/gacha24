@@ -152,13 +152,15 @@ export default function SlotEditor() {
     onError: (error) => toast.error("エラー: " + error.message),
   });
 
-  const updateSlotNumberMutation = useMutation({
-    mutationFn: async ({ slotId, newSlotNumber }: { slotId: string; newSlotNumber: number }) => {
-      const { error } = await supabase
-        .from("gacha_slots")
-        .update({ slot_number: newSlotNumber })
-        .eq("id", slotId);
-      if (error) throw error;
+  const updateSlotNumbersMutation = useMutation({
+    mutationFn: async (updates: { slotId: string; newSlotNumber: number }[]) => {
+      for (const update of updates) {
+        const { error } = await supabase
+          .from("gacha_slots")
+          .update({ slot_number: update.newSlotNumber })
+          .eq("id", update.slotId);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       refetchSlots();
@@ -188,11 +190,45 @@ export default function SlotEditor() {
     setSlotNumberEdits(prev => ({ ...prev, [slotId]: num }));
   };
 
-  const handleSlotNumberBlur = (slot: SlotWithCard) => {
-    const newNumber = slotNumberEdits[slot.id];
-    if (newNumber !== slot.slot_number && newNumber > 0 && !slot.is_drawn) {
-      updateSlotNumberMutation.mutate({ slotId: slot.id, newSlotNumber: newNumber });
+  const handleSlotNumberBlur = (editedSlot: SlotWithCard) => {
+    if (!slots) return;
+    const newNumber = slotNumberEdits[editedSlot.id];
+    if (newNumber === editedSlot.slot_number || newNumber <= 0 || editedSlot.is_drawn) return;
+
+    // Check for duplicates and resolve them
+    const updates: { slotId: string; newSlotNumber: number }[] = [];
+    const usedNumbers = new Set<number>();
+    
+    // First, add the edited slot with its new number
+    updates.push({ slotId: editedSlot.id, newSlotNumber: newNumber });
+    usedNumbers.add(newNumber);
+
+    // Then, process other slots and shift duplicates
+    const otherSlots = slots
+      .filter(s => s.id !== editedSlot.id && !s.is_drawn)
+      .sort((a, b) => a.slot_number - b.slot_number);
+
+    for (const slot of otherSlots) {
+      let slotNum = slot.slot_number;
+      // If this number conflicts, find the next available
+      while (usedNumbers.has(slotNum)) {
+        slotNum++;
+      }
+      if (slotNum !== slot.slot_number) {
+        updates.push({ slotId: slot.id, newSlotNumber: slotNum });
+      }
+      usedNumbers.add(slotNum);
     }
+
+    // Update local state immediately
+    const newEdits = { ...slotNumberEdits };
+    updates.forEach(u => {
+      newEdits[u.slotId] = u.newSlotNumber;
+    });
+    setSlotNumberEdits(newEdits);
+
+    // Save to database
+    updateSlotNumbersMutation.mutate(updates);
   };
 
   const generateSlotsMutation = useMutation({
@@ -329,7 +365,7 @@ export default function SlotEditor() {
                   <p className="text-muted-foreground">カードが登録されていません</p>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    {cards?.map((card) => (
+                    {[...(cards || [])].sort((a, b) => b.conversion_points - a.conversion_points).map((card) => (
                       <div key={card.id} className="border rounded-lg p-3 space-y-2">
                         {card.image_url ? (
                           <img
