@@ -67,8 +67,8 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
   const [selections, setSelections] = useState<Map<string, ActionType>>(new Map());
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // ハズレ以外のカード
-  const actionableCards = drawnCards.filter(card => card.prizeTier !== "miss");
+  // 全カードが選択対象（ハズレも含む）
+  const actionableCards = drawnCards;
 
   useEffect(() => {
     if (isOpen && drawnCards.length > 0) {
