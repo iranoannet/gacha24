@@ -5,8 +5,7 @@ const categories = [
   { id: "pokemon", label: "ポケモン" },
   { id: "onepiece", label: "ワンピース" },
   { id: "yugioh", label: "遊戯王" },
-  { id: "love", label: "ラブプラ" },
-  { id: "hobby", label: "ホビー" },
+  { id: "weiss", label: "ヴァイス" },
 ];
 
 const tags = [
