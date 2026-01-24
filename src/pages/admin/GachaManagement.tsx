@@ -1083,8 +1083,8 @@ export default function GachaManagement() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-12">画像</TableHead>
                           <TableHead>商品名</TableHead>
-                          <TableHead className="w-20">ポイント</TableHead>
                           <TableHead className="w-16">追加</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1093,10 +1093,25 @@ export default function GachaManagement() {
                           !selectedCategory || (c as any).category === selectedCategory
                         ).map((card) => (
                           <TableRow key={card.id}>
-                            <TableCell className="font-medium text-sm truncate max-w-[180px]" title={card.name}>
+                            <TableCell className="p-1">
+                              {card.image_url ? (
+                                <img 
+                                  src={card.image_url} 
+                                  alt={card.name}
+                                  className="w-10 h-10 object-cover rounded"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-10 h-10 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
+                                  No
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium text-sm truncate max-w-[140px]" title={card.name}>
                               {card.name}
                             </TableCell>
-                            <TableCell className="text-xs">{card.conversion_points}pt</TableCell>
                             <TableCell>
                               <Button
                                 size="sm"
@@ -1124,16 +1139,33 @@ export default function GachaManagement() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-12">画像</TableHead>
                           <TableHead>商品名</TableHead>
-                          <TableHead className="w-20">枚数</TableHead>
-                          <TableHead className="w-24">賞</TableHead>
-                          <TableHead className="w-12">削除</TableHead>
+                          <TableHead className="w-16">枚数</TableHead>
+                          <TableHead className="w-20">賞</TableHead>
+                          <TableHead className="w-10">削除</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {selectedItems.map((item) => (
                           <TableRow key={item.card.id}>
-                            <TableCell className="font-medium text-sm truncate max-w-[140px]" title={item.card.name}>
+                            <TableCell className="p-1">
+                              {item.card.image_url ? (
+                                <img 
+                                  src={item.card.image_url} 
+                                  alt={item.card.name}
+                                  className="w-10 h-10 object-cover rounded"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-10 h-10 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
+                                  No
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium text-sm truncate max-w-[100px]" title={item.card.name}>
                               {item.card.name}
                             </TableCell>
                             <TableCell>
@@ -1143,7 +1175,7 @@ export default function GachaManagement() {
                                 max={9999}
                                 value={item.quantity}
                                 onChange={(e) => updateItemQuantity(item.card.id, parseInt(e.target.value) || 1)}
-                                className="w-16 h-8 text-sm"
+                                className="w-14 h-8 text-sm"
                               />
                             </TableCell>
                             <TableCell>
@@ -1151,7 +1183,7 @@ export default function GachaManagement() {
                                 value={item.prizeTier}
                                 onValueChange={(value: PrizeTier) => updateItemPrizeTier(item.card.id, value)}
                               >
-                                <SelectTrigger className="w-20 h-8">
+                                <SelectTrigger className="w-16 h-8">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
