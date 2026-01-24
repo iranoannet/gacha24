@@ -58,9 +58,6 @@ export default function SlotEditor() {
   const [lockedSlots, setLockedSlots] = useState<Set<string>>(new Set());
   const [drawMode, setDrawMode] = useState<"random" | "ordered">("random");
   const [slotNumberEdits, setSlotNumberEdits] = useState<Record<string, number>>({});
-  const [currentPage, setCurrentPage] = useState(1);
-  const [goToPage, setGoToPage] = useState("");
-  const itemsPerPage = 100;
   const [newCard, setNewCard] = useState({
     name: "",
     rarity: "C" as CardRarity,
@@ -443,19 +440,8 @@ export default function SlotEditor() {
                   <Button
                     variant="outline"
                     onClick={() => generateSlotsMutation.mutate()}
-                    disabled={
-                      !cards?.length || 
-                      generateSlotsMutation.isPending || 
-                      isGachaActive || 
-                      (slots?.length === selectedGacha?.total_slots)
-                    }
-                    title={
-                      isGachaActive 
-                        ? "公開中のガチャでは使用できません" 
-                        : slots?.length === selectedGacha?.total_slots 
-                          ? "スロットが全て埋まっています" 
-                          : ""
-                    }
+                    disabled={!cards?.length || generateSlotsMutation.isPending || isGachaActive}
+                    title={isGachaActive ? "公開中のガチャでは使用できません" : ""}
                   >
                     <Shuffle className="w-4 h-4 mr-1" />
                     {generateSlotsMutation.isPending ? "生成中..." : "ランダム生成"}
@@ -490,7 +476,7 @@ export default function SlotEditor() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortedSlots.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((slot) => (
+                        {sortedSlots.slice(0, 100).map((slot) => (
                           <TableRow 
                             key={slot.id}
                             className={drawMode === "ordered" && lockedSlots.has(slot.id) ? "bg-amber-50 dark:bg-amber-950/30" : ""}
@@ -569,73 +555,10 @@ export default function SlotEditor() {
                     </Table>
                   </div>
                 )}
-                {slots && slots.length > itemsPerPage && (
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-                    <p className="text-sm text-muted-foreground">
-                      {(currentPage - 1) * itemsPerPage + 1}〜{Math.min(currentPage * itemsPerPage, slots.length)}件を表示中（全{slots.length}件）
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(1)}
-                        disabled={currentPage === 1}
-                      >
-                        最初
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                      >
-                        前へ
-                      </Button>
-                      <span className="text-sm px-2">
-                        {currentPage} / {Math.ceil(slots.length / itemsPerPage)}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.min(Math.ceil(slots.length / itemsPerPage), p + 1))}
-                        disabled={currentPage >= Math.ceil(slots.length / itemsPerPage)}
-                      >
-                        次へ
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(Math.ceil(slots.length / itemsPerPage))}
-                        disabled={currentPage >= Math.ceil(slots.length / itemsPerPage)}
-                      >
-                        最後
-                      </Button>
-                      <div className="flex items-center gap-1 ml-2">
-                        <Input
-                          type="number"
-                          className="w-16 text-center"
-                          placeholder="ページ"
-                          value={goToPage}
-                          onChange={(e) => setGoToPage(e.target.value)}
-                          min={1}
-                          max={Math.ceil(slots.length / itemsPerPage)}
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const page = parseInt(goToPage);
-                            if (page >= 1 && page <= Math.ceil(slots.length / itemsPerPage)) {
-                              setCurrentPage(page);
-                              setGoToPage("");
-                            }
-                          }}
-                        >
-                          移動
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                {slots && slots.length > 100 && (
+                  <p className="text-sm text-muted-foreground mt-4">
+                    先頭100件を表示中（全{slots.length}件）
+                  </p>
                 )}
               </CardContent>
             </Card>
