@@ -1,3 +1,4 @@
+import { useState } from "react";
 import MainLayout from "@/components/layout/MainLayout";
 import HeroBanner from "@/components/home/HeroBanner";
 import CategoryTabs from "@/components/home/CategoryTabs";
@@ -8,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const Index = () => {
+  const [selectedCategory, setSelectedCategory] = useState("all");
+
   const { data: gachaList, isLoading } = useQuery({
     queryKey: ["gachas-public"],
     queryFn: async () => {
@@ -22,13 +25,23 @@ const Index = () => {
     },
   });
 
+  // カテゴリでフィルタリング
+  const filteredGachaList = gachaList?.filter((gacha) => {
+    if (selectedCategory === "all") return true;
+    return (gacha as any).category === selectedCategory;
+  });
+
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+  };
+
   return (
     <MainLayout>
       {/* Hero Banner */}
       <HeroBanner />
 
       {/* Category Tabs */}
-      <CategoryTabs />
+      <CategoryTabs onCategoryChange={handleCategoryChange} />
 
       {/* Featured Section */}
       <div className="bg-gradient-to-b from-accent/10 to-transparent py-4">
@@ -51,7 +64,7 @@ const Index = () => {
               <Skeleton key={i} className="h-64 w-full rounded-lg" />
             ))}
           </div>
-        ) : gachaList && gachaList.length > 0 ? (
+        ) : filteredGachaList && filteredGachaList.length > 0 ? (
           <motion.div 
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
             initial="hidden"
@@ -65,7 +78,7 @@ const Index = () => {
               },
             }}
           >
-            {gachaList.map((gacha) => (
+            {filteredGachaList.map((gacha) => (
               <GachaCard
                 key={gacha.id}
                 id={gacha.id}
@@ -80,7 +93,9 @@ const Index = () => {
           </motion.div>
         ) : (
           <div className="text-center py-12 text-muted-foreground">
-            現在公開中のガチャはありません
+            {selectedCategory === "all" 
+              ? "現在公開中のガチャはありません" 
+              : "このカテゴリのガチャはありません"}
           </div>
         )}
       </section>
