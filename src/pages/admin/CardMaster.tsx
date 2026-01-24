@@ -185,6 +185,8 @@ export default function CardMaster() {
     },
     onError: (error) => {
       toast.error("エラー: " + error.message);
+      setIsDeleteOpen(false);
+      setDeleteCategory(null);
     },
   });
 
