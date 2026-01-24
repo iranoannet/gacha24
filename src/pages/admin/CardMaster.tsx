@@ -75,20 +75,27 @@ export default function CardMaster() {
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
 
   const importMutation = useMutation({
-    mutationFn: async (cardsData: Array<{ name: string; image_url: string; conversion_points: number; category: CardCategory }>) => {
-      // バッチサイズ（Supabaseの制限を考慮）
+    mutationFn: async (data: { cardsData: Array<{ name: string; image_url: string; conversion_points: number; category: CardCategory }>; category: CardCategory }) => {
+      // 1. 同じカテゴリの既存データを削除（ガチャに紐付いていないもののみ）
+      toast.info("既存データを削除中...");
+      const { error: deleteError } = await supabase
+        .from("cards")
+        .delete()
+        .eq("category", data.category)
+        .is("gacha_id", null);
+      if (deleteError) throw deleteError;
+
+      // 2. 新規データをバッチで挿入
       const BATCH_SIZE = 500;
-      const totalBatches = Math.ceil(cardsData.length / BATCH_SIZE);
       
-      for (let i = 0; i < cardsData.length; i += BATCH_SIZE) {
-        const batch = cardsData.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < data.cardsData.length; i += BATCH_SIZE) {
+        const batch = data.cardsData.slice(i, i + BATCH_SIZE);
         const { error } = await supabase.from("cards").insert(batch);
         if (error) throw error;
         
-        // 進捗更新
         setImportProgress({ 
-          current: Math.min(i + BATCH_SIZE, cardsData.length), 
-          total: cardsData.length 
+          current: Math.min(i + BATCH_SIZE, data.cardsData.length), 
+          total: data.cardsData.length 
         });
       }
       
@@ -96,7 +103,7 @@ export default function CardMaster() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["master-cards"] });
-      toast.success("商品マスタをインポートしました");
+      toast.success("商品マスタを更新しました");
       setImportCategory(null);
     },
     onError: (error) => {
@@ -113,25 +120,6 @@ export default function CardMaster() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["master-cards"] });
       toast.success("商品を削除しました");
-    },
-    onError: (error) => {
-      toast.error("エラー: " + error.message);
-    },
-  });
-
-  // カテゴリ未設定の商品を一括削除
-  const bulkDeleteMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .from("cards")
-        .delete()
-        .is("gacha_id", null)
-        .is("category", null);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["master-cards"] });
-      toast.success("カテゴリ未設定の商品を削除しました");
     },
     onError: (error) => {
       toast.error("エラー: " + error.message);
@@ -209,9 +197,9 @@ export default function CardMaster() {
       return;
     }
 
-    toast.success(`${cardsData.length.toLocaleString()}件の商品を読み込みました。インポートを開始します...`);
+    toast.info(`${cardsData.length.toLocaleString()}件の商品を読み込みました。既存データを置き換えます...`);
     setIsCSVOpen(false);
-    importMutation.mutate(cardsData);
+    importMutation.mutate({ cardsData, category: importCategory });
   };
 
   return (
@@ -219,12 +207,6 @@ export default function CardMaster() {
       <div className="space-y-6">
         <div className="flex gap-2 flex-wrap">
           <Dialog open={isCSVOpen} onOpenChange={(open) => { setIsCSVOpen(open); if (!open) setImportCategory(null); }}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Upload className="w-4 h-4" />
-                CSVインポート
-              </Button>
-            </DialogTrigger>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Upload className="w-4 h-4" />
@@ -264,27 +246,12 @@ export default function CardMaster() {
                   onChange={handleCSVImport}
                   disabled={importMutation.isPending || !importCategory}
                 />
-                {!importCategory && (
-                  <p className="text-sm text-destructive">カテゴリを選択してからファイルを選択してください</p>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  ※ 同じカテゴリの既存データは全て置き換えられます
+                </p>
               </div>
             </DialogContent>
           </Dialog>
-          
-          {/* カテゴリ未設定商品の一括削除ボタン */}
-          <Button
-            variant="destructive"
-            className="gap-2"
-            onClick={() => {
-              if (confirm("カテゴリ未設定の商品をすべて削除しますか？\n（ガチャに紐付いていない商品のみ削除されます）")) {
-                bulkDeleteMutation.mutate();
-              }
-            }}
-            disabled={bulkDeleteMutation.isPending}
-          >
-            <Trash2 className="w-4 h-4" />
-            {bulkDeleteMutation.isPending ? "削除中..." : "カテゴリ未設定を一括削除"}
-          </Button>
         </div>
 
         {/* インポート進捗表示 */}
