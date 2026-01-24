@@ -1,5 +1,6 @@
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useGachaSound } from "@/hooks/useGachaSound";
 
 // ========== 可変パラメータ型定義 ==========
 export type ColorTheme = "gold" | "red" | "blue" | "purple" | "green" | "neon" | "monochrome" | "rainbow";
@@ -131,9 +132,12 @@ export function GachaAnimationSystem({
   const [phase, setPhase] = useState<"intro" | "anticipation" | "result" | "afterglow">("intro");
   const [showFlash, setShowFlash] = useState(false);
   const [rainbowIndex, setRainbowIndex] = useState(0);
+  const [slotNumbers, setSlotNumbers] = useState<number[]>([7, 7, 7]);
+  const [isSlotSpinning, setIsSlotSpinning] = useState(false);
   const theme = colorThemes[colorTheme];
   const settings = intensitySettings[intensity];
   const controls = useAnimation();
+  const sound = useGachaSound();
 
   // レインボー色循環（S賞演出用）
   useEffect(() => {
@@ -143,6 +147,47 @@ export function GachaAnimationSystem({
     }, 100);
     return () => clearInterval(interval);
   }, [isRainbow, isPlaying]);
+
+  // スロットマシン演出
+  useEffect(() => {
+    if (!isPlaying) return;
+    
+    setIsSlotSpinning(true);
+    
+    // スロット回転中の数字ランダム変化
+    const spinInterval = setInterval(() => {
+      setSlotNumbers([
+        Math.floor(Math.random() * 10),
+        Math.floor(Math.random() * 10),
+        Math.floor(Math.random() * 10),
+      ]);
+    }, 80);
+    
+    // 結果確定時にスロット停止
+    const stopTimer = setTimeout(() => {
+      clearInterval(spinInterval);
+      setIsSlotSpinning(false);
+      // 最終数字（賞に応じて変更）
+      if (isRainbow) {
+        setSlotNumbers([7, 7, 7]); // ジャックポット
+      } else if (intensity >= 4) {
+        setSlotNumbers([7, 7, Math.floor(Math.random() * 3) + 5]);
+      } else if (intensity >= 3) {
+        setSlotNumbers([7, Math.floor(Math.random() * 5) + 3, Math.floor(Math.random() * 10)]);
+      } else {
+        setSlotNumbers([
+          Math.floor(Math.random() * 10),
+          Math.floor(Math.random() * 10),
+          Math.floor(Math.random() * 10),
+        ]);
+      }
+    }, PHASE.ANTICIPATION.end * 1000);
+    
+    return () => {
+      clearInterval(spinInterval);
+      clearTimeout(stopTimer);
+    };
+  }, [isPlaying, intensity, isRainbow]);
 
   // パーティクル生成
   const particles = useMemo(() => {
@@ -156,16 +201,51 @@ export function GachaAnimationSystem({
     }));
   }, [settings.particleCount]);
 
-  // フェーズ管理タイマー
+  // フェーズ管理タイマー＋サウンドエフェクト
   useEffect(() => {
     if (!isPlaying) return;
 
     setPhase("intro");
-
+    
+    // イントロ：スロット回転音
+    sound.playSlotSpin();
+    
     const timers = [
-      setTimeout(() => setPhase("anticipation"), PHASE.INTRO.end * 1000),
+      // 期待煽りフェーズ
+      setTimeout(() => {
+        setPhase("anticipation");
+        // ドラムロール開始
+        sound.playDrumRoll(PHASE.ANTICIPATION.end - PHASE.INTRO.end);
+        // ハートビート（高レア時）
+        if (intensity >= 3) {
+          sound.playHeartbeat(intensity);
+        }
+      }, PHASE.INTRO.end * 1000),
+      
+      // 結果確定フェーズ
       setTimeout(() => {
         setPhase("result");
+        
+        // インパクト音
+        sound.playImpact();
+        
+        // 賞に応じたサウンド
+        if (isRainbow) {
+          // S賞ジャックポット
+          setTimeout(() => sound.playJackpot(), 100);
+        } else if (intensity >= 4) {
+          // A賞
+          setTimeout(() => sound.playReveal(true), 100);
+          setTimeout(() => sound.playCoinSound(5), 300);
+        } else if (intensity >= 2) {
+          // B賞以上
+          setTimeout(() => sound.playReveal(false), 100);
+          setTimeout(() => sound.playCoinSound(3), 300);
+        } else {
+          // ミス
+          setTimeout(() => sound.playMiss(), 100);
+        }
+        
         // フラッシュ演出
         for (let i = 0; i < settings.flashCount; i++) {
           setTimeout(() => {
@@ -174,12 +254,21 @@ export function GachaAnimationSystem({
           }, i * 150);
         }
       }, PHASE.ANTICIPATION.end * 1000),
-      setTimeout(() => setPhase("afterglow"), PHASE.RESULT.end * 1000),
+      
+      // 余韻フェーズ
+      setTimeout(() => {
+        setPhase("afterglow");
+        // 高レア時は追加のコイン音
+        if (intensity >= 4) {
+          sound.playCoinSound(playCount);
+        }
+      }, PHASE.RESULT.end * 1000),
+      
       setTimeout(() => onComplete(), PHASE.AFTERGLOW.end * 1000),
     ];
 
     return () => timers.forEach(clearTimeout);
-  }, [isPlaying, settings.flashCount, onComplete]);
+  }, [isPlaying, settings.flashCount, onComplete, intensity, isRainbow, sound, playCount]);
 
   // カメラモーション
   const getCameraAnimation = () => {
@@ -559,6 +648,124 @@ export function GachaAnimationSystem({
             </motion.div>
           </motion.div>
         </motion.div>
+
+        {/* スロットマシン演出 */}
+        <div className="absolute top-16 inset-x-0 flex justify-center">
+          <motion.div
+            className="flex gap-2 p-3 rounded-xl"
+            style={{
+              background: "rgba(0, 0, 0, 0.8)",
+              border: "3px solid",
+              borderColor: isRainbow ? RAINBOW_COLORS[rainbowIndex] : theme.primary,
+              boxShadow: isRainbow 
+                ? `0 0 30px ${RAINBOW_COLORS[rainbowIndex]}, inset 0 0 20px rgba(255,255,255,0.1)`
+                : `0 0 30px ${theme.glow}, inset 0 0 20px rgba(255,255,255,0.1)`,
+            }}
+            animate={{
+              scale: phase === "result" ? [1, 1.05, 1] : 1,
+            }}
+            transition={{ duration: 0.3 }}
+          >
+            {slotNumbers.map((num, i) => (
+              <motion.div
+                key={i}
+                className="w-14 h-20 rounded-lg flex items-center justify-center text-4xl font-black overflow-hidden"
+                style={{
+                  background: "linear-gradient(to bottom, #1a1a1a, #2a2a2a, #1a1a1a)",
+                  border: "2px solid rgba(255,255,255,0.2)",
+                  boxShadow: "inset 0 0 15px rgba(0,0,0,0.5)",
+                  color: isRainbow ? RAINBOW_COLORS[(rainbowIndex + i * 2) % 7] : theme.primary,
+                  textShadow: isRainbow 
+                    ? `0 0 15px ${RAINBOW_COLORS[(rainbowIndex + i * 2) % 7]}`
+                    : `0 0 15px ${theme.glow}`,
+                }}
+                animate={{
+                  y: isSlotSpinning ? [0, -5, 0, 5, 0] : 0,
+                }}
+                transition={{
+                  duration: 0.1,
+                  repeat: isSlotSpinning ? Infinity : 0,
+                  delay: i * 0.02,
+                }}
+              >
+                <motion.span
+                  animate={{
+                    opacity: isSlotSpinning ? [1, 0.6, 1] : 1,
+                  }}
+                  transition={{
+                    duration: 0.05,
+                    repeat: isSlotSpinning ? Infinity : 0,
+                  }}
+                >
+                  {num}
+                </motion.span>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+
+        {/* コイン爆発エフェクト（結果時） */}
+        {(phase === "result" || phase === "afterglow") && intensity >= 3 && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {Array.from({ length: intensity * 5 }).map((_, i) => (
+              <motion.div
+                key={`coin-${i}`}
+                className="absolute text-3xl"
+                initial={{
+                  x: "50%",
+                  y: "50%",
+                  scale: 0,
+                  opacity: 0,
+                }}
+                animate={{
+                  x: `${20 + Math.random() * 60}%`,
+                  y: `${20 + Math.random() * 60}%`,
+                  scale: [0, 1.2, 1],
+                  opacity: [0, 1, 1, 0],
+                  rotate: [0, 360 * (i % 2 === 0 ? 1 : -1)],
+                }}
+                transition={{
+                  duration: 1.5,
+                  delay: i * 0.05,
+                  ease: "easeOut",
+                }}
+              >
+                💰
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* スター/キラキラエフェクト（S賞） */}
+        {isRainbow && (phase === "result" || phase === "afterglow") && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {Array.from({ length: 15 }).map((_, i) => (
+              <motion.div
+                key={`star-${i}`}
+                className="absolute text-4xl"
+                initial={{
+                  x: `${Math.random() * 100}%`,
+                  y: `${Math.random() * 100}%`,
+                  scale: 0,
+                  opacity: 0,
+                }}
+                animate={{
+                  scale: [0, 1.5, 0],
+                  opacity: [0, 1, 0],
+                  rotate: [0, 180],
+                }}
+                transition={{
+                  duration: 1,
+                  delay: i * 0.1,
+                  repeat: Infinity,
+                  repeatDelay: 0.5,
+                }}
+              >
+                ⭐
+              </motion.div>
+            ))}
+          </div>
+        )}
 
         {/* テキスト演出 */}
         <div className="absolute inset-x-0 bottom-1/4 flex flex-col items-center">
