@@ -272,7 +272,7 @@ export default function GachaManagement() {
         }
       });
 
-      // カード情報を取得
+      // カード情報を取得（ガチャに紐付いたカード）
       const cardIds = Object.keys(cardCounts);
       if (cardIds.length === 0) {
         toast.error("このパックには商品がありません");
@@ -280,19 +280,50 @@ export default function GachaManagement() {
         return;
       }
 
-      const { data: cards, error: cardsError } = await supabase
+      const { data: gachaCards, error: cardsError } = await supabase
         .from("cards")
         .select("*")
         .in("id", cardIds);
       
       if (cardsError) throw cardsError;
 
-      // SelectedCardItemの形式に変換
-      const copiedItems: SelectedCardItem[] = (cards || []).map((card) => ({
-        card: card,
-        quantity: cardCounts[card.id] || 1,
-        prizeTier: (card.prize_tier as PrizeTier) || "miss",
-      }));
+      // 商品マスタから同じ名前・カテゴリのカードを探して画像URLを取得
+      const cardNames = [...new Set((gachaCards || []).map(c => c.name))];
+      const gachaCategory = (gacha as any).category;
+      
+      let masterCards: any[] = [];
+      if (cardNames.length > 0 && gachaCategory) {
+        const { data: masters } = await supabase
+          .from("cards")
+          .select("*")
+          .is("gacha_id", null)
+          .eq("category", gachaCategory)
+          .in("name", cardNames);
+        masterCards = masters || [];
+      }
+
+      // 名前でマスターカードをマップ
+      const masterCardMap: Record<string, any> = {};
+      masterCards.forEach(card => {
+        if (!masterCardMap[card.name]) {
+          masterCardMap[card.name] = card;
+        }
+      });
+
+      // SelectedCardItemの形式に変換（マスタがあればそちらを使用）
+      const copiedItems: SelectedCardItem[] = (gachaCards || []).map((gachaCard) => {
+        const masterCard = masterCardMap[gachaCard.name];
+        const cardToUse = masterCard || gachaCard;
+        return {
+          card: {
+            ...cardToUse,
+            // マスタがあればそのimage_urlを使う、なければガチャカードのを使う
+            image_url: masterCard?.image_url || gachaCard.image_url || "",
+          },
+          quantity: cardCounts[gachaCard.id] || 1,
+          prizeTier: (gachaCard.prize_tier as PrizeTier) || "miss",
+        };
+      });
 
       // フォームにセット
       setFormData({
