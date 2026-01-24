@@ -41,36 +41,78 @@ const CATEGORY_LABELS: Record<CardCategory, string> = {
   onepiece: "ワンピース",
 };
 
+const PAGE_SIZE = 100;
+
 export default function CardMaster() {
   const queryClient = useQueryClient();
   const [isCSVOpen, setIsCSVOpen] = useState(false);
   const [importCategory, setImportCategory] = useState<CardCategory | null>(null);
   const [filterCategory, setFilterCategory] = useState<CardCategory | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [currentPage, setCurrentPage] = useState(0);
 
-  const { data: cards, isLoading } = useQuery({
-    queryKey: ["master-cards"],
+  // カテゴリ別の件数を取得
+  const { data: categoryCounts } = useQuery({
+    queryKey: ["card-counts"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cards")
-        .select("*")
-        .is("gacha_id", null)
-        .order("created_at", { ascending: false });
+        .select("category")
+        .is("gacha_id", null);
       if (error) throw error;
-      return data;
+      
+      const counts: Record<string, number> = { all: 0 };
+      data?.forEach((card: any) => {
+        const cat = card.category || "uncategorized";
+        counts[cat] = (counts[cat] || 0) + 1;
+        counts.all++;
+      });
+      return counts;
     },
   });
 
-  // フィルタリング
-  const filteredCards = (cards || []).filter((card) => {
-    if (filterCategory !== "all" && (card as any).category !== filterCategory) {
-      return false;
-    }
-    if (searchQuery && !card.name.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
-    return true;
+  // ページネーション付きでカード取得
+  const { data: cardsData, isLoading, isFetching } = useQuery({
+    queryKey: ["master-cards", filterCategory, searchQuery, currentPage],
+    queryFn: async () => {
+      let query = supabase
+        .from("cards")
+        .select("*", { count: "exact" })
+        .is("gacha_id", null);
+      
+      // カテゴリフィルタ
+      if (filterCategory !== "all") {
+        query = query.eq("category", filterCategory);
+      }
+      
+      // 検索フィルタ（サーバーサイド）
+      if (searchQuery) {
+        query = query.ilike("name", `%${searchQuery}%`);
+      }
+      
+      // ページネーション
+      const from = currentPage * PAGE_SIZE;
+      query = query
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+      
+      const { data, error, count } = await query;
+      if (error) throw error;
+      return { cards: data, totalCount: count || 0 };
+    },
+    placeholderData: (prev) => prev,
   });
+
+  const cards = cardsData?.cards || [];
+  const totalCount = cardsData?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // 検索実行（Enterキーまたはボタン）
+  const handleSearch = () => {
+    setSearchQuery(searchInput);
+    setCurrentPage(0);
+  };
 
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
 
@@ -285,40 +327,76 @@ export default function CardMaster() {
           </CardHeader>
           <CardContent>
             {/* フィルター */}
-            <div className="flex gap-4 mb-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="商品名で検索..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
+            <div className="flex gap-4 mb-4 flex-wrap">
+              <div className="flex-1 min-w-64">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="商品名で検索... (Enterで検索)"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button onClick={handleSearch} variant="secondary">検索</Button>
                 </div>
               </div>
               <Select
                 value={filterCategory}
-                onValueChange={(value: CardCategory | "all") => setFilterCategory(value)}
+                onValueChange={(value: CardCategory | "all") => {
+                  setFilterCategory(value);
+                  setCurrentPage(0);
+                }}
               >
                 <SelectTrigger className="w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">すべてのカテゴリ</SelectItem>
-                  <SelectItem value="yugioh">遊戯王</SelectItem>
-                  <SelectItem value="pokemon">ポケモン</SelectItem>
-                  <SelectItem value="weiss">ヴァイスシュバルツ</SelectItem>
-                  <SelectItem value="onepiece">ワンピース</SelectItem>
+                  <SelectItem value="all">すべて ({categoryCounts?.all?.toLocaleString() || 0})</SelectItem>
+                  <SelectItem value="yugioh">遊戯王 ({categoryCounts?.yugioh?.toLocaleString() || 0})</SelectItem>
+                  <SelectItem value="pokemon">ポケモン ({categoryCounts?.pokemon?.toLocaleString() || 0})</SelectItem>
+                  <SelectItem value="weiss">ヴァイス ({categoryCounts?.weiss?.toLocaleString() || 0})</SelectItem>
+                  <SelectItem value="onepiece">ワンピ ({categoryCounts?.onepiece?.toLocaleString() || 0})</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
+            {/* 件数表示 */}
+            <div className="flex justify-between items-center mb-4 text-sm text-muted-foreground">
+              <span>
+                {totalCount.toLocaleString()}件中 {currentPage * PAGE_SIZE + 1}〜{Math.min((currentPage + 1) * PAGE_SIZE, totalCount)}件を表示
+                {isFetching && " (読み込み中...)"}
+              </span>
+              {totalPages > 1 && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === 0}
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                  >
+                    前へ
+                  </Button>
+                  <span className="py-1 px-2">{currentPage + 1} / {totalPages}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= totalPages - 1}
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                  >
+                    次へ
+                  </Button>
+                </div>
+              )}
+            </div>
+
             {isLoading ? (
               <p className="text-muted-foreground">読み込み中...</p>
-            ) : filteredCards.length === 0 ? (
+            ) : cards.length === 0 ? (
               <p className="text-muted-foreground">
-                {cards?.length === 0 
+                {totalCount === 0 
                   ? "商品がありません。CSVからインポートしてください。" 
                   : "条件に一致する商品がありません。"}
               </p>
@@ -335,7 +413,7 @@ export default function CardMaster() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCards.map((card) => (
+                  {cards.map((card) => (
                     <TableRow key={card.id}>
                       <TableCell>
                         {card.image_url ? (
