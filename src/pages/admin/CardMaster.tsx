@@ -72,10 +72,27 @@ export default function CardMaster() {
     return true;
   });
 
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
+
   const importMutation = useMutation({
     mutationFn: async (cardsData: Array<{ name: string; image_url: string; conversion_points: number; category: CardCategory }>) => {
-      const { error } = await supabase.from("cards").insert(cardsData);
-      if (error) throw error;
+      // バッチサイズ（Supabaseの制限を考慮）
+      const BATCH_SIZE = 500;
+      const totalBatches = Math.ceil(cardsData.length / BATCH_SIZE);
+      
+      for (let i = 0; i < cardsData.length; i += BATCH_SIZE) {
+        const batch = cardsData.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase.from("cards").insert(batch);
+        if (error) throw error;
+        
+        // 進捗更新
+        setImportProgress({ 
+          current: Math.min(i + BATCH_SIZE, cardsData.length), 
+          total: cardsData.length 
+        });
+      }
+      
+      setImportProgress(null);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["master-cards"] });
@@ -83,6 +100,7 @@ export default function CardMaster() {
       setImportCategory(null);
     },
     onError: (error) => {
+      setImportProgress(null);
       toast.error("エラー: " + error.message);
     },
   });
@@ -130,6 +148,8 @@ export default function CardMaster() {
       return;
     }
 
+    toast.info("CSVファイルを読み込み中...");
+
     const text = await file.text();
     const lines = text.split("\n").filter((line) => line.trim());
     const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/^\ufeff/, ''));
@@ -168,7 +188,7 @@ export default function CardMaster() {
       return;
     }
 
-    console.log("Importing cards:", cardsData.slice(0, 3));
+    toast.success(`${cardsData.length.toLocaleString()}件の商品を読み込みました。インポートを開始します...`);
     setIsCSVOpen(false);
     importMutation.mutate(cardsData);
   };
@@ -218,15 +238,34 @@ export default function CardMaster() {
                   disabled={importMutation.isPending || !importCategory}
                 />
                 {!importCategory && (
-                  <p className="text-sm text-amber-600">カテゴリを選択してからファイルを選択してください</p>
-                )}
-                {importMutation.isPending && (
-                  <p className="text-sm text-muted-foreground">インポート中...</p>
+                  <p className="text-sm text-destructive">カテゴリを選択してからファイルを選択してください</p>
                 )}
               </div>
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* インポート進捗表示 */}
+        {importMutation.isPending && importProgress && (
+          <Card className="border-primary">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <p className="font-medium">インポート中...</p>
+                  <p className="text-sm text-muted-foreground">
+                    {importProgress.current.toLocaleString()} / {importProgress.total.toLocaleString()} 件完了
+                  </p>
+                </div>
+                <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
