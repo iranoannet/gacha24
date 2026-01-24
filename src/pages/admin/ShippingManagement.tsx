@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,11 +26,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Download, Truck, Check, Search, Package } from "lucide-react";
+import { Download, Truck, Check, Search, Package, Printer } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
+import { ShippingLabelPrint } from "@/components/admin/ShippingLabelPrint";
 
 type ActionStatus = Database["public"]["Enums"]["action_status"];
 type InventoryAction = Database["public"]["Tables"]["inventory_actions"]["Row"];
@@ -49,7 +50,8 @@ export default function ShippingManagement() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState("");
-
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
   const { data: shippingRequests, isLoading } = useQuery({
     queryKey: ["admin-shipping", statusFilter],
     queryFn: async () => {
@@ -184,6 +186,15 @@ export default function ShippingManagement() {
     );
   });
 
+  const selectedRequests = shippingRequests?.filter((r) => selectedIds.includes(r.id)) || [];
+
+  const handlePrint = () => {
+    setPrintDialogOpen(true);
+  };
+
+  const executePrint = () => {
+    window.print();
+  };
   return (
     <AdminLayout title="配送管理">
       <div className="space-y-6">
@@ -235,6 +246,10 @@ export default function ShippingManagement() {
                 <Button size="sm" variant="outline" onClick={exportCSV}>
                   <Download className="w-4 h-4 mr-1" />
                   CSVエクスポート
+                </Button>
+                <Button size="sm" variant="outline" onClick={handlePrint}>
+                  <Printer className="w-4 h-4 mr-1" />
+                  ラベル印刷
                 </Button>
               </div>
             </CardContent>
@@ -351,6 +366,24 @@ export default function ShippingManagement() {
               >
                 {updateStatusMutation.isPending ? "更新中..." : "発送済みにする"}
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Print Labels Dialog */}
+        <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-between">
+                <span>配送ラベルプレビュー（{selectedRequests.length}件）</span>
+                <Button onClick={executePrint} className="ml-4">
+                  <Printer className="w-4 h-4 mr-2" />
+                  印刷する
+                </Button>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="mt-4">
+              <ShippingLabelPrint ref={printRef} requests={selectedRequests} />
             </div>
           </DialogContent>
         </Dialog>
