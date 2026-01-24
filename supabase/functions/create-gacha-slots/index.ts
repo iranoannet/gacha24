@@ -119,11 +119,26 @@ Deno.serve(async (req) => {
 
     console.log(`Inserted ${insertedCardIds.length} cards, creating slots...`);
 
-    // スロットを一括生成
+    // Generate random slot numbers
+    const generateRandomSlotNumbers = (count: number): number[] => {
+      const numbers: number[] = [];
+      const maxRange = count * 100; // Large range for random numbers
+      while (numbers.length < count) {
+        const randomNum = Math.floor(Math.random() * maxRange) + 1;
+        if (!numbers.includes(randomNum)) {
+          numbers.push(randomNum);
+        }
+      }
+      return numbers;
+    };
+
+    const randomSlotNumbers = generateRandomSlotNumbers(insertedCardIds.length);
+
+    // スロットを一括生成 with random slot numbers
     const slotsToInsert = insertedCardIds.map((cardId, index) => ({
       gacha_id: gachaId,
       card_id: cardId,
-      slot_number: index + 1,
+      slot_number: randomSlotNumbers[index],
     }));
 
     // スロットを一括挿入（500件ずつバッチ処理）
