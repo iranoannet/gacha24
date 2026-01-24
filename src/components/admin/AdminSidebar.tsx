@@ -43,7 +43,7 @@ export function AdminSidebar() {
           </div>
           <div>
             <h2 className="font-bold text-sm">管理画面</h2>
-            <p className="text-xs text-muted-foreground">Admin Dashboard</p>
+            <p className="text-xs text-muted-foreground">管理者ダッシュボード</p>
           </div>
         </div>
       </SidebarHeader>
