@@ -134,48 +134,9 @@ export default function CardMaster() {
 
   const importMutation = useMutation({
     mutationFn: async (data: { cardsData: Array<{ name: string; image_url: string; conversion_points: number; category: CardCategory }>; category: CardCategory }) => {
-      // 1. 同じカテゴリの既存データをバッチ削除（タイムアウト回避）
-      toast.info("既存データを削除中...");
-      
-      const DELETE_BATCH_SIZE = 100; // URLが長くなりすぎないように小さく
-      let deletedCount = 0;
-      let hasMore = true;
-      
-      while (hasMore) {
-        // IDのみ取得して削除（効率的）
-        const { data: toDelete, error: fetchError } = await supabase
-          .from("cards")
-          .select("id")
-          .eq("category", data.category)
-          .is("gacha_id", null)
-          .limit(DELETE_BATCH_SIZE);
-        
-        if (fetchError) throw fetchError;
-        
-        if (!toDelete || toDelete.length === 0) {
-          hasMore = false;
-          break;
-        }
-        
-        const idsToDelete = toDelete.map(c => c.id);
-        const { error: deleteError } = await supabase
-          .from("cards")
-          .delete()
-          .in("id", idsToDelete);
-        
-        if (deleteError) throw deleteError;
-        
-        deletedCount += toDelete.length;
-        toast.info(`${deletedCount}件削除完了...`);
-        
-        if (toDelete.length < DELETE_BATCH_SIZE) {
-          hasMore = false;
-        }
-      }
-      
-      toast.info(`既存データ ${deletedCount}件を削除しました。新規データを挿入中...`);
+      toast.info("データを挿入中...");
 
-      // 2. 新規データをバッチで挿入
+      // バッチで挿入
       const BATCH_SIZE = 500;
       
       for (let i = 0; i < data.cardsData.length; i += BATCH_SIZE) {
@@ -193,7 +154,8 @@ export default function CardMaster() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["master-cards"] });
-      toast.success("商品マスタを更新しました");
+      queryClient.invalidateQueries({ queryKey: ["card-counts"] });
+      toast.success("商品マスタを追加しました");
       setImportCategory(null);
     },
     onError: (error) => {
