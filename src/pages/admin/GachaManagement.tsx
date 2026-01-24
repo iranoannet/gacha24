@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Upload, X } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, X, ArrowRight, ArrowLeft } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -38,14 +37,22 @@ type GachaMaster = Database["public"]["Tables"]["gacha_masters"]["Row"];
 type GachaStatus = Database["public"]["Enums"]["gacha_status"];
 type CardRow = Database["public"]["Tables"]["cards"]["Row"];
 
+type PrizeTier = "S" | "A" | "B" | "miss";
+
+interface SelectedCardItem {
+  card: CardRow;
+  quantity: number;
+  prizeTier: PrizeTier;
+}
+
 export default function GachaManagement() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createStep, setCreateStep] = useState<"select" | "configure">("select");
   const [selectedGacha, setSelectedGacha] = useState<GachaMaster | null>(null);
-  const [selectedCards, setSelectedCards] = useState<string[]>([]);
+  const [selectedItems, setSelectedItems] = useState<SelectedCardItem[]>([]);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
@@ -85,7 +92,7 @@ export default function GachaManagement() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { formData: typeof formData; cardIds: string[]; bannerFile: File | null }) => {
+    mutationFn: async (data: { formData: typeof formData; items: SelectedCardItem[]; bannerFile: File | null }) => {
       let bannerUrl = data.formData.banner_url;
 
       // バナー画像をアップロード
@@ -93,35 +100,53 @@ export default function GachaManagement() {
         bannerUrl = await uploadBanner(data.bannerFile);
       }
 
+      // 総口数を計算
+      const totalSlots = data.items.reduce((sum, item) => sum + item.quantity, 0);
+
       // 1. ガチャを作成
       const { data: gacha, error: gachaError } = await supabase
         .from("gacha_masters")
         .insert({
           ...data.formData,
           banner_url: bannerUrl || null,
-          total_slots: data.cardIds.length,
-          remaining_slots: data.cardIds.length,
+          total_slots: totalSlots,
+          remaining_slots: totalSlots,
         })
         .select()
         .single();
       if (gachaError) throw gachaError;
 
-      // 2. 選択した商品をガチャに紐付け
-      if (data.cardIds.length > 0) {
-        const { error: updateError } = await supabase
-          .from("cards")
-          .update({ gacha_id: gacha.id })
-          .in("id", data.cardIds);
-        if (updateError) throw updateError;
+      // 2. カードを複製してガチャに紐付け、スロットを生成
+      let slotNumber = 1;
+      const cardIdsToUpdate: string[] = [];
 
-        // 3. スロットを生成
-        const slots = data.cardIds.map((cardId, index) => ({
-          gacha_id: gacha.id,
-          card_id: cardId,
-          slot_number: index + 1,
-        }));
-        const { error: slotError } = await supabase.from("gacha_slots").insert(slots);
-        if (slotError) throw slotError;
+      for (const item of data.items) {
+        // 同じカードを複数枚追加する場合、各枚数分のスロットを作成
+        for (let i = 0; i < item.quantity; i++) {
+          // 新しいカードレコードを作成（元のカードは商品マスタに残す）
+          const { data: newCard, error: cardError } = await supabase
+            .from("cards")
+            .insert({
+              name: item.card.name,
+              image_url: item.card.image_url,
+              conversion_points: item.card.conversion_points,
+              gacha_id: gacha.id,
+              prize_tier: item.prizeTier,
+            })
+            .select()
+            .single();
+          if (cardError) throw cardError;
+
+          // スロットを生成
+          const { error: slotError } = await supabase
+            .from("gacha_slots")
+            .insert({
+              gacha_id: gacha.id,
+              card_id: newCard.id,
+              slot_number: slotNumber++,
+            });
+          if (slotError) throw slotError;
+        }
       }
 
       return gacha;
@@ -168,8 +193,8 @@ export default function GachaManagement() {
     mutationFn: async (id: string) => {
       // スロットを削除
       await supabase.from("gacha_slots").delete().eq("gacha_id", id);
-      // 商品の紐付けを解除
-      await supabase.from("cards").update({ gacha_id: null }).eq("gacha_id", id);
+      // ガチャに紐付いたカードを削除（複製されたもの）
+      await supabase.from("cards").delete().eq("gacha_id", id);
       // ガチャを削除
       const { error } = await supabase.from("gacha_masters").delete().eq("id", id);
       if (error) throw error;
@@ -193,9 +218,10 @@ export default function GachaManagement() {
       pop_image_url: "",
       status: "draft",
     });
-    setSelectedCards([]);
+    setSelectedItems([]);
     setBannerFile(null);
     setBannerPreview(null);
+    setCreateStep("select");
   };
 
   const handleEdit = (gacha: GachaMaster) => {
@@ -247,10 +273,51 @@ export default function GachaManagement() {
     setFormData({ ...formData, banner_url: "" });
   };
 
-  const toggleCard = (cardId: string) => {
-    setSelectedCards((prev) =>
-      prev.includes(cardId) ? prev.filter((id) => id !== cardId) : [...prev, cardId]
-    );
+  const addCardToSelection = (card: CardRow) => {
+    // 既に選択済みかチェック
+    if (selectedItems.some(item => item.card.id === card.id)) {
+      toast.error("この商品は既に選択されています");
+      return;
+    }
+    setSelectedItems([...selectedItems, { card, quantity: 1, prizeTier: "miss" }]);
+  };
+
+  const removeCardFromSelection = (cardId: string) => {
+    setSelectedItems(selectedItems.filter(item => item.card.id !== cardId));
+  };
+
+  const updateItemQuantity = (cardId: string, quantity: number) => {
+    if (quantity < 1) quantity = 1;
+    if (quantity > 9999) quantity = 9999;
+    setSelectedItems(selectedItems.map(item =>
+      item.card.id === cardId ? { ...item, quantity } : item
+    ));
+  };
+
+  const updateItemPrizeTier = (cardId: string, prizeTier: PrizeTier) => {
+    setSelectedItems(selectedItems.map(item =>
+      item.card.id === cardId ? { ...item, prizeTier } : item
+    ));
+  };
+
+  const getTotalSlots = () => selectedItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  const getPrizeTierLabel = (tier: PrizeTier) => {
+    switch (tier) {
+      case "S": return "S賞";
+      case "A": return "A賞";
+      case "B": return "B賞";
+      case "miss": return "ハズレ";
+    }
+  };
+
+  const getPrizeTierBadgeVariant = (tier: PrizeTier): "default" | "secondary" | "destructive" | "outline" => {
+    switch (tier) {
+      case "S": return "destructive";
+      case "A": return "default";
+      case "B": return "secondary";
+      case "miss": return "outline";
+    }
   };
 
   const getStatusBadge = (status: GachaStatus) => {
@@ -274,127 +341,254 @@ export default function GachaManagement() {
               新規作成
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>新規ガチャ作成</DialogTitle>
+              <DialogTitle>
+                新規ガチャ作成 - {createStep === "select" ? "商品選択" : "枚数・賞設定"}
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-6">
-              {/* 基本情報 */}
-              <div className="space-y-4">
-                <h3 className="font-semibold">基本情報</h3>
-                <div>
-                  <Label htmlFor="title">タイトル</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="ポケモンカード 151オリパ"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="price">1回の価格 (pt)</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      value={formData.price_per_play}
-                      onChange={(e) => setFormData({ ...formData, price_per_play: parseInt(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label>総口数</Label>
-                    <Input value={selectedCards.length} disabled />
-                    <p className="text-xs text-muted-foreground mt-1">選択した商品数で自動設定</p>
-                  </div>
-                </div>
-                <div>
-                  <Label>バナー画像</Label>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
-                  />
-                  {bannerPreview ? (
-                    <div className="relative mt-2">
-                      <img
-                        src={bannerPreview}
-                        alt="バナープレビュー"
-                        className="w-full h-32 object-cover rounded-lg border"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="icon"
-                        className="absolute top-2 right-2 h-6 w-6"
-                        onClick={removeBannerPreview}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
+            
+            {createStep === "select" ? (
+              <div className="space-y-6">
+                {/* 選択済み商品サマリー */}
+                <div className="bg-muted/50 rounded-lg p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">選択済み: {selectedItems.length}種類 / 合計{getTotalSlots()}枚</span>
                     <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full mt-2 gap-2"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => setCreateStep("configure")}
+                      disabled={selectedItems.length === 0}
+                      className="gap-2"
                     >
-                      <Upload className="h-4 w-4" />
-                      画像をアップロード
+                      次へ
+                      <ArrowRight className="w-4 h-4" />
                     </Button>
+                  </div>
+                </div>
+
+                {/* 商品選択リスト */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold">商品マスタから選択</h3>
+                  {availableCards?.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      利用可能な商品がありません。先に商品マスタからインポートしてください。
+                    </p>
+                  ) : (
+                    <div className="border rounded-lg max-h-80 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>商品名</TableHead>
+                            <TableHead className="w-24">ポイント</TableHead>
+                            <TableHead className="w-24">操作</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {availableCards?.map((card) => {
+                            const isSelected = selectedItems.some(item => item.card.id === card.id);
+                            return (
+                              <TableRow key={card.id} className={isSelected ? "bg-muted/50" : ""}>
+                                <TableCell className="font-medium">{card.name}</TableCell>
+                                <TableCell>{card.conversion_points.toLocaleString()}pt</TableCell>
+                                <TableCell>
+                                  {isSelected ? (
+                                    <Badge variant="secondary">選択済</Badge>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => addCardToSelection(card)}
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
                   )}
                 </div>
-              </div>
 
-              {/* 商品選択 */}
-              <div className="space-y-4">
-                <h3 className="font-semibold">商品を選択（{selectedCards.length}件選択中）</h3>
-                {availableCards?.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    利用可能な商品がありません。先に商品マスタからインポートしてください。
-                  </p>
-                ) : (
-                  <div className="border rounded-lg max-h-64 overflow-y-auto">
+                {/* 選択済み商品一覧 */}
+                {selectedItems.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="font-semibold">選択済み商品</h3>
+                    <div className="border rounded-lg max-h-48 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>商品名</TableHead>
+                            <TableHead className="w-24">操作</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedItems.map((item) => (
+                            <TableRow key={item.card.id}>
+                              <TableCell className="font-medium">{item.card.name}</TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => removeCardFromSelection(item.card.id)}
+                                >
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* 戻るボタン */}
+                <Button variant="outline" onClick={() => setCreateStep("select")} className="gap-2">
+                  <ArrowLeft className="w-4 h-4" />
+                  商品選択に戻る
+                </Button>
+
+                {/* 基本情報 */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold">基本情報</h3>
+                  <div>
+                    <Label htmlFor="title">タイトル</Label>
+                    <Input
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      placeholder="ポケモンカード 151オリパ"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="price">1回の価格 (pt)</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        value={formData.price_per_play}
+                        onChange={(e) => setFormData({ ...formData, price_per_play: parseInt(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <Label>総口数</Label>
+                      <Input value={getTotalSlots()} disabled />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>バナー画像</Label>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
+                    />
+                    {bannerPreview ? (
+                      <div className="relative mt-2">
+                        <img
+                          src={bannerPreview}
+                          alt="バナープレビュー"
+                          className="w-full h-32 object-cover rounded-lg border"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2 h-6 w-6"
+                          onClick={removeBannerPreview}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full mt-2 gap-2"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Upload className="h-4 w-4" />
+                        画像をアップロード
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 商品ごとの枚数・賞設定 */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold">商品ごとの枚数・賞設定</h3>
+                  <div className="border rounded-lg overflow-hidden">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-12">選択</TableHead>
                           <TableHead>商品名</TableHead>
-                          <TableHead>ポイント</TableHead>
-                          <TableHead>レアリティ</TableHead>
+                          <TableHead className="w-28">ポイント</TableHead>
+                          <TableHead className="w-32">枚数</TableHead>
+                          <TableHead className="w-32">賞</TableHead>
+                          <TableHead className="w-16">削除</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {availableCards?.map((card) => (
-                          <TableRow key={card.id} className="cursor-pointer" onClick={() => toggleCard(card.id)}>
+                        {selectedItems.map((item) => (
+                          <TableRow key={item.card.id}>
+                            <TableCell className="font-medium text-sm">{item.card.name}</TableCell>
+                            <TableCell>{item.card.conversion_points.toLocaleString()}pt</TableCell>
                             <TableCell>
-                              <Checkbox
-                                checked={selectedCards.includes(card.id)}
-                                onCheckedChange={() => toggleCard(card.id)}
+                              <Input
+                                type="number"
+                                min={1}
+                                max={9999}
+                                value={item.quantity}
+                                onChange={(e) => updateItemQuantity(item.card.id, parseInt(e.target.value) || 1)}
+                                className="w-24"
                               />
                             </TableCell>
-                            <TableCell className="font-medium">{card.name}</TableCell>
-                            <TableCell>{card.conversion_points.toLocaleString()}pt</TableCell>
                             <TableCell>
-                              <Badge variant="outline">{card.rarity}</Badge>
+                              <Select
+                                value={item.prizeTier}
+                                onValueChange={(value: PrizeTier) => updateItemPrizeTier(item.card.id, value)}
+                              >
+                                <SelectTrigger className="w-28">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="S">S賞</SelectItem>
+                                  <SelectItem value="A">A賞</SelectItem>
+                                  <SelectItem value="B">B賞</SelectItem>
+                                  <SelectItem value="miss">ハズレ</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => removeCardFromSelection(item.card.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
-                )}
-              </div>
+                </div>
 
-              <Button
-                className="w-full"
-                onClick={() => createMutation.mutate({ formData, cardIds: selectedCards, bannerFile })}
-                disabled={createMutation.isPending || !formData.title || selectedCards.length === 0}
-              >
-                {createMutation.isPending ? "作成中..." : `${selectedCards.length}件の商品でガチャを作成`}
-              </Button>
-            </div>
+                <Button
+                  className="w-full"
+                  onClick={() => createMutation.mutate({ formData, items: selectedItems, bannerFile })}
+                  disabled={createMutation.isPending || !formData.title || selectedItems.length === 0}
+                >
+                  {createMutation.isPending ? "作成中..." : `${getTotalSlots()}口のガチャを作成`}
+                </Button>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
 
@@ -444,7 +638,7 @@ export default function GachaManagement() {
                             variant="ghost"
                             size="icon"
                             onClick={() => {
-                              if (confirm("本当に削除しますか？関連する商品の紐付けも解除されます。")) {
+                              if (confirm("本当に削除しますか？関連する商品も削除されます。")) {
                                 deleteMutation.mutate(gacha.id);
                               }
                             }}

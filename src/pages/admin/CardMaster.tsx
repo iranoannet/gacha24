@@ -69,29 +69,59 @@ export default function CardMaster() {
     },
   });
 
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
   const handleCSVImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const text = await file.text();
     const lines = text.split("\n").filter((line) => line.trim());
-    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/^\ufeff/, ''));
+
+    // Find column indices
+    const nameIndex = headers.findIndex(h => h === 'name' || h === '商品名' || h === '名前');
+    const imageIndex = headers.findIndex(h => h === 'image_url' || h === '画像url' || h === '画像');
+    const pointsIndex = headers.findIndex(h => h === 'points' || h === 'ポイント' || h === 'pt' || h === 'conversion_points');
+
+    if (nameIndex === -1) {
+      toast.error("「name」または「商品名」列が見つかりません");
+      return;
+    }
 
     const cardsData: Array<{ name: string; image_url: string; conversion_points: number }> = [];
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",").map((v) => v.trim());
-      const card: Record<string, string> = {};
-      headers.forEach((header, index) => {
-        card[header] = values[index];
-      });
+      const values = parseCSVLine(lines[i]);
+      
+      const name = values[nameIndex];
+      if (!name) continue;
 
-      if (!card.name) continue;
+      const image_url = imageIndex >= 0 ? values[imageIndex] || "" : "";
+      const points = pointsIndex >= 0 ? parseInt(values[pointsIndex]) || 0 : 0;
 
       cardsData.push({
-        name: card.name,
-        image_url: card.image_url || "",
-        conversion_points: parseInt(card.points) || 0,
+        name,
+        image_url,
+        conversion_points: points,
       });
     }
 
@@ -100,6 +130,7 @@ export default function CardMaster() {
       return;
     }
 
+    console.log("Importing cards:", cardsData.slice(0, 3)); // Debug log
     setIsCSVOpen(false);
     importMutation.mutate(cardsData);
   };
@@ -158,7 +189,6 @@ export default function CardMaster() {
                     <TableHead>画像</TableHead>
                     <TableHead>商品名</TableHead>
                     <TableHead>ポイント</TableHead>
-                    <TableHead>レアリティ</TableHead>
                     <TableHead>登録日</TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
@@ -181,9 +211,6 @@ export default function CardMaster() {
                       </TableCell>
                       <TableCell className="font-medium">{card.name}</TableCell>
                       <TableCell>{card.conversion_points.toLocaleString()}pt</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{card.rarity}</Badge>
-                      </TableCell>
                       <TableCell>
                         {new Date(card.created_at).toLocaleDateString("ja-JP")}
                       </TableCell>
