@@ -143,15 +143,15 @@ const GachaDetail = () => {
     enabled: !!id,
   });
 
-  // カードラインナップ取得
+  // カードラインナップ取得（公開ビューから取得）
   const { data: cards, isLoading: isLoadingCards } = useQuery({
     queryKey: ["gacha-cards", id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("cards")
+        .from("cards_public")
         .select("*")
         .eq("gacha_id", id!)
-        .order("prize_tier", { ascending: true });
+        .order("rarity", { ascending: true });
       if (error) throw error;
       return data as Card[];
     },
