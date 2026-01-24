@@ -3,69 +3,25 @@ import HeroBanner from "@/components/home/HeroBanner";
 import CategoryTabs from "@/components/home/CategoryTabs";
 import GachaCard from "@/components/gacha/GachaCard";
 import { motion } from "framer-motion";
-import gachaCard1 from "@/assets/gacha-card-1.jpg";
-import gachaCard2 from "@/assets/gacha-card-2.jpg";
-import gachaCard3 from "@/assets/gacha-card-3.jpg";
-
-// Mock gacha data
-const gachaList = [
-  {
-    id: "1",
-    title: "超お試しガチャ",
-    imageUrl: gachaCard1,
-    pricePerPlay: 0,
-    totalSlots: Infinity,
-    remainingSlots: Infinity,
-    borderColor: "red" as const,
-  },
-  {
-    id: "2",
-    title: "ノーリスク初回限定",
-    imageUrl: gachaCard2,
-    pricePerPlay: 50,
-    totalSlots: 1000,
-    remainingSlots: 847,
-    borderColor: "gold" as const,
-  },
-  {
-    id: "3",
-    title: "3パック確定ガチャ",
-    imageUrl: gachaCard3,
-    pricePerPlay: 1000,
-    totalSlots: 500,
-    remainingSlots: 423,
-    borderColor: "gold" as const,
-  },
-  {
-    id: "4",
-    title: "アド確定ガチャ",
-    imageUrl: gachaCard1,
-    pricePerPlay: 5000,
-    totalSlots: 200,
-    remainingSlots: 156,
-    borderColor: "rainbow" as const,
-  },
-  {
-    id: "5",
-    title: "1等山盛りオリパ",
-    imageUrl: gachaCard2,
-    pricePerPlay: 500,
-    totalSlots: 1000,
-    remainingSlots: 0,
-    borderColor: "gold" as const,
-  },
-  {
-    id: "6",
-    title: "新春限定ガチャ",
-    imageUrl: gachaCard3,
-    pricePerPlay: 300,
-    totalSlots: 800,
-    remainingSlots: 612,
-    borderColor: "gold" as const,
-  },
-];
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Index = () => {
+  const { data: gachaList, isLoading } = useQuery({
+    queryKey: ["gachas-public"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gacha_masters")
+        .select("*")
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
   return (
     <MainLayout>
       {/* Hero Banner */}
@@ -89,26 +45,44 @@ const Index = () => {
 
       {/* Gacha Grid */}
       <section className="container px-4 py-6">
-        <motion.div 
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: {},
-            visible: {
-              transition: {
-                staggerChildren: 0.1,
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-64 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : gachaList && gachaList.length > 0 ? (
+          <motion.div 
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: {},
+              visible: {
+                transition: {
+                  staggerChildren: 0.1,
+                },
               },
-            },
-          }}
-        >
-          {gachaList.map((gacha) => (
-            <GachaCard
-              key={gacha.id}
-              {...gacha}
-            />
-          ))}
-        </motion.div>
+            }}
+          >
+            {gachaList.map((gacha) => (
+              <GachaCard
+                key={gacha.id}
+                id={gacha.id}
+                title={gacha.title}
+                imageUrl={gacha.banner_url || "/placeholder.svg"}
+                pricePerPlay={gacha.price_per_play}
+                totalSlots={gacha.total_slots}
+                remainingSlots={gacha.remaining_slots}
+                borderColor="gold"
+              />
+            ))}
+          </motion.div>
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            現在公開中のガチャはありません
+          </div>
+        )}
       </section>
     </MainLayout>
   );
