@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -28,8 +29,13 @@ const GachaCard = ({
   remainingSlots,
   borderColor = "gold",
 }: GachaCardProps) => {
+  const navigate = useNavigate();
   const soldPercentage = ((totalSlots - remainingSlots) / totalSlots) * 100;
   const isSoldOut = remainingSlots === 0;
+
+  const handleNavigateToDetail = () => {
+    navigate(`/gacha/${id}`);
+  };
 
   return (
     <motion.div
@@ -40,12 +46,15 @@ const GachaCard = ({
     >
       {/* Border wrapper for rainbow effect */}
       <div className={`rounded-xl overflow-hidden ${borderStyles[borderColor]}`}>
-        {/* Image */}
-        <div className="relative aspect-[4/3] overflow-hidden">
+        {/* Image - Clickable to detail */}
+        <div 
+          className="relative aspect-[4/3] overflow-hidden cursor-pointer"
+          onClick={handleNavigateToDetail}
+        >
           <img
             src={imageUrl}
             alt={title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
           />
           {isSoldOut && (
             <div className="absolute inset-0 bg-foreground/60 flex items-center justify-center">
@@ -83,19 +92,19 @@ const GachaCard = ({
             <Button
               className="flex-1 btn-gacha h-9 text-sm"
               disabled={isSoldOut}
+              onClick={handleNavigateToDetail}
             >
               1回ガチャ
             </Button>
             {pricePerPlay <= 100 && (
-              <>
-                <Button
-                  variant="outline"
-                  className="flex-1 h-9 text-sm border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-                  disabled={isSoldOut}
-                >
-                  10連ガチャ
-                </Button>
-              </>
+              <Button
+                variant="outline"
+                className="flex-1 h-9 text-sm border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                disabled={isSoldOut}
+                onClick={handleNavigateToDetail}
+              >
+                10連ガチャ
+              </Button>
             )}
           </div>
         </div>
