@@ -1,17 +1,21 @@
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect, useMemo } from "react";
 
 // ギャンブル感のあるサウンドエフェクトを生成
 export function useGachaSound() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
 
-  // AudioContextの初期化
+  // AudioContextの初期化（安定した参照を維持）
   const getAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       gainNodeRef.current = audioContextRef.current.createGain();
       gainNodeRef.current.gain.value = 0.3;
       gainNodeRef.current.connect(audioContextRef.current.destination);
+    }
+    // AudioContextが停止状態の場合は再開
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
     }
     return { ctx: audioContextRef.current, gain: gainNodeRef.current! };
   }, []);
@@ -321,7 +325,8 @@ export function useGachaSound() {
     };
   }, []);
 
-  return {
+  // 安定した参照を返す
+  return useMemo(() => ({
     playSlotSpin,
     playDrumRoll,
     playReveal,
@@ -330,5 +335,5 @@ export function useGachaSound() {
     playHeartbeat,
     playJackpot,
     playMiss,
-  };
+  }), [playSlotSpin, playDrumRoll, playReveal, playCoinSound, playImpact, playHeartbeat, playJackpot, playMiss]);
 }
