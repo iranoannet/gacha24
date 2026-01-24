@@ -18,6 +18,7 @@ interface SelectedCardItem {
 interface CreateGachaSlotsRequest {
   gachaId: string;
   items: SelectedCardItem[];
+  appendMode?: boolean; // 追加モード（既存スロットに追加）
 }
 
 Deno.serve(async (req) => {
@@ -62,13 +63,36 @@ Deno.serve(async (req) => {
     }
 
     // リクエストボディ
-    const { gachaId, items } = (await req.json()) as CreateGachaSlotsRequest;
+    const { gachaId, items, appendMode } = (await req.json()) as CreateGachaSlotsRequest;
 
     if (!gachaId || !items || items.length === 0) {
       return new Response(
         JSON.stringify({ error: "gachaIdとitemsが必要です" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // 追加モードの場合、下書き状態かチェック
+    if (appendMode) {
+      const { data: gacha, error: gachaError } = await supabaseAuth
+        .from("gacha_masters")
+        .select("status")
+        .eq("id", gachaId)
+        .single();
+      
+      if (gachaError || !gacha) {
+        return new Response(
+          JSON.stringify({ error: "ガチャが見つかりません" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      if (gacha.status !== "draft") {
+        return new Response(
+          JSON.stringify({ error: "下書き状態のガチャのみ追加可能です" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // サービスロールで操作
@@ -119,10 +143,42 @@ Deno.serve(async (req) => {
 
     console.log(`Inserted ${insertedCardIds.length} cards, creating slots...`);
 
-    // Generate random slot numbers within 1 to count (shuffled)
-    const generateRandomSlotNumbers = (count: number): number[] => {
+    // 追加モードの場合は既存の最大slot_numberを取得
+    let startSlotNumber = 1;
+    let existingTotalSlots = 0;
+    let existingRemainingSlots = 0;
+    
+    if (appendMode) {
+      // 既存のガチャ情報を取得
+      const { data: gachaData } = await supabase
+        .from("gacha_masters")
+        .select("total_slots, remaining_slots")
+        .eq("id", gachaId)
+        .single();
+      
+      if (gachaData) {
+        existingTotalSlots = gachaData.total_slots;
+        existingRemainingSlots = gachaData.remaining_slots;
+      }
+      
+      // 既存の最大slot_numberを取得
+      const { data: maxSlotData } = await supabase
+        .from("gacha_slots")
+        .select("slot_number")
+        .eq("gacha_id", gachaId)
+        .order("slot_number", { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (maxSlotData) {
+        startSlotNumber = maxSlotData.slot_number + 1;
+      }
+    }
+
+    // Generate random slot numbers within new range (shuffled)
+    const generateRandomSlotNumbers = (count: number, start: number): number[] => {
       const numbers: number[] = [];
-      for (let i = 1; i <= count; i++) {
+      for (let i = start; i < start + count; i++) {
         numbers.push(i);
       }
       // Fisher-Yates shuffle
@@ -133,7 +189,7 @@ Deno.serve(async (req) => {
       return numbers;
     };
 
-    const randomSlotNumbers = generateRandomSlotNumbers(insertedCardIds.length);
+    const randomSlotNumbers = generateRandomSlotNumbers(insertedCardIds.length, startSlotNumber);
 
     // スロットを一括生成 with random slot numbers
     const slotsToInsert = insertedCardIds.map((cardId, index) => ({
@@ -153,12 +209,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ガチャマスタの口数を更新
+    // ガチャマスタの口数を更新（追加モードの場合は加算）
+    const newTotalSlots = appendMode ? existingTotalSlots + totalSlots : totalSlots;
+    const newRemainingSlots = appendMode ? existingRemainingSlots + totalSlots : totalSlots;
+    
     const { error: updateError } = await supabase
       .from("gacha_masters")
       .update({
-        total_slots: totalSlots,
-        remaining_slots: totalSlots,
+        total_slots: newTotalSlots,
+        remaining_slots: newRemainingSlots,
       })
       .eq("id", gachaId);
 
@@ -167,13 +226,15 @@ Deno.serve(async (req) => {
       throw new Error(`ガチャ更新エラー: ${updateError.message}`);
     }
 
-    console.log(`Successfully created ${totalSlots} slots for gacha ${gachaId}`);
+    const actionText = appendMode ? "追加" : "作成";
+    console.log(`Successfully ${actionText} ${totalSlots} slots for gacha ${gachaId}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `${totalSlots}口のスロットを作成しました`,
-        totalSlots,
+        message: `${totalSlots}口のスロットを${actionText}しました`,
+        totalSlots: newTotalSlots,
+        addedSlots: totalSlots,
         cardCount: insertedCardIds.length,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
