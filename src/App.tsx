@@ -11,6 +11,14 @@ import Reports from "./pages/Reports";
 import MyPage from "./pages/MyPage";
 import NotFound from "./pages/NotFound";
 
+// Admin pages
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import GachaManagement from "./pages/admin/GachaManagement";
+import SlotEditor from "./pages/admin/SlotEditor";
+import ShippingManagement from "./pages/admin/ShippingManagement";
+import UserManagement from "./pages/admin/UserManagement";
+import Analytics from "./pages/admin/Analytics";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -26,6 +34,15 @@ const App = () => (
           <Route path="/history" element={<History />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/mypage" element={<MyPage />} />
+          
+          {/* Admin Routes */}
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/gachas" element={<GachaManagement />} />
+          <Route path="/admin/slots" element={<SlotEditor />} />
+          <Route path="/admin/shipping" element={<ShippingManagement />} />
+          <Route path="/admin/users" element={<UserManagement />} />
+          <Route path="/admin/analytics" element={<Analytics />} />
+          
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
