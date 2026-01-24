@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, Coins, Share2, Loader2 } from "lucide-react";
@@ -11,7 +11,15 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { GachaResultModal } from "@/components/gacha/GachaResultModal";
 import { GachaConfirmDialog } from "@/components/gacha/GachaConfirmDialog";
-import { GachaPlayAnimation } from "@/components/gacha/GachaPlayAnimation";
+import { 
+  GachaAnimationSystem, 
+  getAnimationParamsForPrizeTier, 
+  getHighestPrizeTier,
+  type ColorTheme,
+  type IntensityLevel,
+  type CameraMotion,
+  type ParticleStyle,
+} from "@/components/gacha/GachaAnimationSystem";
 import type { Database } from "@/integrations/supabase/types";
 
 type GachaMaster = Database["public"]["Tables"]["gacha_masters"]["Row"];
@@ -60,6 +68,22 @@ const GachaDetail = () => {
   const [gachaResult, setGachaResult] = useState<GachaResult | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingPlayCount, setPendingPlayCount] = useState<1 | 10 | 100>(1);
+  
+  // 演出パラメータ
+  const [animParams, setAnimParams] = useState<{
+    colorTheme: ColorTheme;
+    intensity: IntensityLevel;
+    cameraMotion: CameraMotion;
+    particleStyle: ParticleStyle;
+  }>({
+    colorTheme: "gold",
+    intensity: 3,
+    cameraMotion: "zoomIn",
+    particleStyle: "spark",
+  });
+  
+  // 結果データを保持
+  const pendingResultRef = useRef<GachaResult | null>(null);
 
   // ガチャマスタ情報取得
   const { data: gacha, isLoading: isLoadingGacha } = useQuery({
@@ -169,10 +193,6 @@ const GachaDetail = () => {
     setShowConfirm(false);
     setIsPlaying(true);
 
-    // アニメーション用の最小待機時間
-    const minAnimationTime = 2000;
-    const startTime = Date.now();
-
     try {
       const { data, error } = await supabase.functions.invoke("play-gacha", {
         body: {
@@ -189,20 +209,17 @@ const GachaDetail = () => {
         throw new Error(data.error);
       }
 
-      // アニメーションの最低表示時間を確保
-      const elapsed = Date.now() - startTime;
-      if (elapsed < minAnimationTime) {
-        await new Promise((resolve) => setTimeout(resolve, minAnimationTime - elapsed));
-      }
+      // 最高賞に応じた演出パラメータを設定
+      const highestTier = getHighestPrizeTier(data.drawnCards);
+      const params = getAnimationParamsForPrizeTier(highestTier, count);
+      setAnimParams(params);
 
-      // 結果を表示
-      setGachaResult({
+      // 結果をRefに保持（演出完了後に表示）
+      pendingResultRef.current = {
         drawnCards: data.drawnCards,
         totalCost: data.totalCost,
         newBalance: data.newBalance,
-      });
-      setIsPlaying(false);
-      setShowResult(true);
+      };
 
       // キャッシュを更新
       queryClient.invalidateQueries({ queryKey: ["gacha-detail", id] });
@@ -212,6 +229,16 @@ const GachaDetail = () => {
       setIsPlaying(false);
       const message = error instanceof Error ? error.message : "エラーが発生しました";
       toast.error(message);
+    }
+  };
+
+  // 演出完了時の処理
+  const handleAnimationComplete = () => {
+    setIsPlaying(false);
+    if (pendingResultRef.current) {
+      setGachaResult(pendingResultRef.current);
+      pendingResultRef.current = null;
+      setShowResult(true);
     }
   };
 
@@ -440,8 +467,16 @@ const GachaDetail = () => {
         gachaTitle={gacha?.title || ""}
       />
 
-      {/* Play Animation */}
-      <GachaPlayAnimation isPlaying={isPlaying} playCount={pendingPlayCount} />
+      {/* Play Animation - 新演出システム */}
+      <GachaAnimationSystem
+        isPlaying={isPlaying}
+        onComplete={handleAnimationComplete}
+        colorTheme={animParams.colorTheme}
+        intensity={animParams.intensity}
+        cameraMotion={animParams.cameraMotion}
+        particleStyle={animParams.particleStyle}
+        playCount={pendingPlayCount}
+      />
 
       {/* Result Modal */}
       <GachaResultModal
