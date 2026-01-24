@@ -137,6 +137,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "gacha_slots_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "gacha_slots_gacha_id_fkey"
             columns: ["gacha_id"]
             isOneToOne: false
@@ -195,6 +202,13 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_actions_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards_public"
             referencedColumns: ["id"]
           },
           {
@@ -297,7 +311,44 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      cards_public: {
+        Row: {
+          conversion_points: number | null
+          created_at: string | null
+          gacha_id: string | null
+          id: string | null
+          image_url: string | null
+          name: string | null
+          rarity: Database["public"]["Enums"]["card_rarity"] | null
+        }
+        Insert: {
+          conversion_points?: number | null
+          created_at?: string | null
+          gacha_id?: string | null
+          id?: string | null
+          image_url?: string | null
+          name?: string | null
+          rarity?: Database["public"]["Enums"]["card_rarity"] | null
+        }
+        Update: {
+          conversion_points?: number | null
+          created_at?: string | null
+          gacha_id?: string | null
+          id?: string | null
+          image_url?: string | null
+          name?: string | null
+          rarity?: Database["public"]["Enums"]["card_rarity"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cards_gacha_id_fkey"
+            columns: ["gacha_id"]
+            isOneToOne: false
+            referencedRelation: "gacha_masters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       has_role: {
