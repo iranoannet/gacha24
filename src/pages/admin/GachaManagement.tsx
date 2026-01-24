@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Package } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, X } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -43,6 +43,11 @@ export default function GachaManagement() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedGacha, setSelectedGacha] = useState<GachaMaster | null>(null);
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     title: "",
     price_per_play: 500,
@@ -80,12 +85,20 @@ export default function GachaManagement() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { formData: typeof formData; cardIds: string[] }) => {
+    mutationFn: async (data: { formData: typeof formData; cardIds: string[]; bannerFile: File | null }) => {
+      let bannerUrl = data.formData.banner_url;
+
+      // バナー画像をアップロード
+      if (data.bannerFile) {
+        bannerUrl = await uploadBanner(data.bannerFile);
+      }
+
       // 1. ガチャを作成
       const { data: gacha, error: gachaError } = await supabase
         .from("gacha_masters")
         .insert({
           ...data.formData,
+          banner_url: bannerUrl || null,
           total_slots: data.cardIds.length,
           remaining_slots: data.cardIds.length,
         })
@@ -126,8 +139,18 @@ export default function GachaManagement() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<typeof formData> }) => {
-      const { error } = await supabase.from("gacha_masters").update(data).eq("id", id);
+    mutationFn: async ({ id, data, bannerFile }: { id: string; data: Partial<typeof formData>; bannerFile: File | null }) => {
+      let bannerUrl = data.banner_url;
+
+      // バナー画像をアップロード
+      if (bannerFile) {
+        bannerUrl = await uploadBanner(bannerFile);
+      }
+
+      const { error } = await supabase.from("gacha_masters").update({
+        ...data,
+        banner_url: bannerUrl || null,
+      }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -171,6 +194,8 @@ export default function GachaManagement() {
       status: "draft",
     });
     setSelectedCards([]);
+    setBannerFile(null);
+    setBannerPreview(null);
   };
 
   const handleEdit = (gacha: GachaMaster) => {
@@ -183,6 +208,43 @@ export default function GachaManagement() {
       pop_image_url: gacha.pop_image_url || "",
       status: gacha.status,
     });
+    setBannerFile(null);
+    setBannerPreview(gacha.banner_url || null);
+  };
+
+  const handleFileSelect = (file: File | null) => {
+    if (file) {
+      setBannerFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBannerPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadBanner = async (file: File): Promise<string> => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${crypto.randomUUID()}.${fileExt}`;
+    const filePath = fileName;
+
+    const { error: uploadError } = await supabase.storage
+      .from('gacha-banners')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from('gacha-banners')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  };
+
+  const removeBannerPreview = () => {
+    setBannerFile(null);
+    setBannerPreview(null);
+    setFormData({ ...formData, banner_url: "" });
   };
 
   const toggleCard = (cardId: string) => {
@@ -246,13 +308,42 @@ export default function GachaManagement() {
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="banner">バナー画像URL</Label>
-                  <Input
-                    id="banner"
-                    value={formData.banner_url}
-                    onChange={(e) => setFormData({ ...formData, banner_url: e.target.value })}
-                    placeholder="https://..."
+                  <Label>バナー画像</Label>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
                   />
+                  {bannerPreview ? (
+                    <div className="relative mt-2">
+                      <img
+                        src={bannerPreview}
+                        alt="バナープレビュー"
+                        className="w-full h-32 object-cover rounded-lg border"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 h-6 w-6"
+                        onClick={removeBannerPreview}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full mt-2 gap-2"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="h-4 w-4" />
+                      画像をアップロード
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -298,7 +389,7 @@ export default function GachaManagement() {
 
               <Button
                 className="w-full"
-                onClick={() => createMutation.mutate({ formData, cardIds: selectedCards })}
+                onClick={() => createMutation.mutate({ formData, cardIds: selectedCards, bannerFile })}
                 disabled={createMutation.isPending || !formData.title || selectedCards.length === 0}
               >
                 {createMutation.isPending ? "作成中..." : `${selectedCards.length}件の商品でガチャを作成`}
@@ -395,12 +486,42 @@ export default function GachaManagement() {
                 />
               </div>
               <div>
-                <Label htmlFor="edit-banner">バナー画像URL</Label>
-                <Input
-                  id="edit-banner"
-                  value={formData.banner_url}
-                  onChange={(e) => setFormData({ ...formData, banner_url: e.target.value })}
+                <Label>バナー画像</Label>
+                <input
+                  type="file"
+                  ref={editFileInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleFileSelect(e.target.files?.[0] || null)}
                 />
+                {bannerPreview ? (
+                  <div className="relative mt-2">
+                    <img
+                      src={bannerPreview}
+                      alt="バナープレビュー"
+                      className="w-full h-32 object-cover rounded-lg border"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2 h-6 w-6"
+                      onClick={removeBannerPreview}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full mt-2 gap-2"
+                    onClick={() => editFileInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4" />
+                    画像をアップロード
+                  </Button>
+                )}
               </div>
               <div>
                 <Label htmlFor="edit-status">ステータス</Label>
@@ -423,7 +544,7 @@ export default function GachaManagement() {
                 className="w-full"
                 onClick={() =>
                   selectedGacha &&
-                  updateMutation.mutate({ id: selectedGacha.id, data: formData })
+                  updateMutation.mutate({ id: selectedGacha.id, data: formData, bannerFile })
                 }
                 disabled={updateMutation.isPending}
               >
