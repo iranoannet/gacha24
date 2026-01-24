@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import MainLayout from "@/components/layout/MainLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Package, Truck, Check, Coins, Loader2 } from "lucide-react";
+import { Package, Truck, Check, Coins, Loader2, AlertCircle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,6 +10,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type InventoryAction = Database["public"]["Tables"]["inventory_actions"]["Row"];
 
@@ -38,6 +49,28 @@ interface InventoryItem {
 const Inventory = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [showAddressDialog, setShowAddressDialog] = useState(false);
+
+  // ユーザーの住所情報を取得
+  const { data: userProfile } = useQuery({
+    queryKey: ["user-address-check", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("postal_code, prefecture, city, address_line1, last_name, first_name, phone_number")
+        .eq("user_id", user.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const hasCompleteAddress = userProfile?.postal_code && userProfile?.prefecture && 
+    userProfile?.city && userProfile?.address_line1 && 
+    userProfile?.last_name && userProfile?.first_name && userProfile?.phone_number;
 
   // ユーザーの当選スロット（inventory_actionに登録されていないもの = 未選択）を取得
   const { data: unselectedItems, isLoading: isLoadingUnselected } = useQuery({
@@ -197,6 +230,15 @@ const Inventory = () => {
     },
   });
 
+  // 発送依頼のハンドラ（住所チェック付き）
+  const handleRequestShipping = (item: InventoryItem) => {
+    if (!hasCompleteAddress) {
+      setShowAddressDialog(true);
+      return;
+    }
+    requestShippingMutation.mutate(item);
+  };
+
   // ポイント変換ミューテーション
   const convertToPointsMutation = useMutation({
     mutationFn: async (item: InventoryItem) => {
@@ -286,7 +328,7 @@ const Inventory = () => {
             size="sm"
             variant="default"
             className="h-8 text-xs"
-            onClick={() => requestShippingMutation.mutate(item)}
+            onClick={() => handleRequestShipping(item)}
             disabled={requestShippingMutation.isPending}
           >
             <Truck className="h-3 w-3 mr-1" />
@@ -401,6 +443,28 @@ const Inventory = () => {
             )}
           </TabsContent>
         </Tabs>
+
+        {/* 住所未登録ダイアログ */}
+        <AlertDialog open={showAddressDialog} onOpenChange={setShowAddressDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                配送先住所が未登録です
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                発送依頼を行うには、お届け先住所の登録が必要です。
+                マイページから住所を登録してください。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>キャンセル</AlertDialogCancel>
+              <AlertDialogAction onClick={() => navigate("/mypage/address")}>
+                住所を登録する
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </MainLayout>
   );

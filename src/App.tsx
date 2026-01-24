@@ -12,6 +12,7 @@ import Inventory from "./pages/Inventory";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
 import MyPage from "./pages/MyPage";
+import ShippingAddress from "./pages/ShippingAddress";
 import NotFound from "./pages/NotFound";
 
 // Admin pages
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/history" element={<History />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/mypage" element={<MyPage />} />
+            <Route path="/mypage/address" element={<ShippingAddress />} />
             
             {/* Admin Routes - Protected */}
             <Route path="/admin" element={<AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>} />
