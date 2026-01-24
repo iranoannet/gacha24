@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Upload, Edit, Trash2, Eye } from "lucide-react";
+import { Plus, Edit, Trash2, Package } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -36,12 +36,13 @@ import type { Database } from "@/integrations/supabase/types";
 
 type GachaMaster = Database["public"]["Tables"]["gacha_masters"]["Row"];
 type GachaStatus = Database["public"]["Enums"]["gacha_status"];
+type CardRow = Database["public"]["Tables"]["cards"]["Row"];
 
 export default function GachaManagement() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isCSVOpen, setIsCSVOpen] = useState(false);
   const [selectedGacha, setSelectedGacha] = useState<GachaMaster | null>(null);
+  const [selectedCards, setSelectedCards] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     title: "",
     price_per_play: 500,
@@ -51,6 +52,7 @@ export default function GachaManagement() {
     status: "draft" as GachaStatus,
   });
 
+  // ガチャ一覧
   const { data: gachas, isLoading } = useQuery({
     queryKey: ["admin-gachas"],
     queryFn: async () => {
@@ -63,16 +65,57 @@ export default function GachaManagement() {
     },
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const { error } = await supabase.from("gacha_masters").insert({
-        ...data,
-        remaining_slots: data.total_slots,
-      });
+  // 商品マスタ（ガチャ未割当）
+  const { data: availableCards } = useQuery({
+    queryKey: ["available-cards"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cards")
+        .select("*")
+        .is("gacha_id", null)
+        .order("name");
       if (error) throw error;
+      return data;
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { formData: typeof formData; cardIds: string[] }) => {
+      // 1. ガチャを作成
+      const { data: gacha, error: gachaError } = await supabase
+        .from("gacha_masters")
+        .insert({
+          ...data.formData,
+          total_slots: data.cardIds.length,
+          remaining_slots: data.cardIds.length,
+        })
+        .select()
+        .single();
+      if (gachaError) throw gachaError;
+
+      // 2. 選択した商品をガチャに紐付け
+      if (data.cardIds.length > 0) {
+        const { error: updateError } = await supabase
+          .from("cards")
+          .update({ gacha_id: gacha.id })
+          .in("id", data.cardIds);
+        if (updateError) throw updateError;
+
+        // 3. スロットを生成
+        const slots = data.cardIds.map((cardId, index) => ({
+          gacha_id: gacha.id,
+          card_id: cardId,
+          slot_number: index + 1,
+        }));
+        const { error: slotError } = await supabase.from("gacha_slots").insert(slots);
+        if (slotError) throw slotError;
+      }
+
+      return gacha;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-gachas"] });
+      queryClient.invalidateQueries({ queryKey: ["available-cards"] });
       setIsCreateOpen(false);
       resetForm();
       toast.success("ガチャを作成しました");
@@ -100,11 +143,17 @@ export default function GachaManagement() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      // スロットを削除
+      await supabase.from("gacha_slots").delete().eq("gacha_id", id);
+      // 商品の紐付けを解除
+      await supabase.from("cards").update({ gacha_id: null }).eq("gacha_id", id);
+      // ガチャを削除
       const { error } = await supabase.from("gacha_masters").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-gachas"] });
+      queryClient.invalidateQueries({ queryKey: ["available-cards"] });
       toast.success("ガチャを削除しました");
     },
     onError: (error) => {
@@ -121,6 +170,7 @@ export default function GachaManagement() {
       pop_image_url: "",
       status: "draft",
     });
+    setSelectedCards([]);
   };
 
   const handleEdit = (gacha: GachaMaster) => {
@@ -135,46 +185,10 @@ export default function GachaManagement() {
     });
   };
 
-  const handleCSVImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const text = await file.text();
-    const lines = text.split("\n").filter((line) => line.trim());
-    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-
-    const cards: Array<{
-      id: string;
-      name: string;
-      image_url: string;
-      conversion_points: number;
-    }> = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",").map((v) => v.trim());
-      const card: Record<string, string> = {};
-      headers.forEach((header, index) => {
-        card[header] = values[index];
-      });
-
-      if (!card.id || !card.name) continue;
-
-      cards.push({
-        id: card.id,
-        name: card.name,
-        image_url: card.image_url || "",
-        conversion_points: parseInt(card.points) || 0,
-      });
-    }
-
-    if (cards.length === 0) {
-      toast.error("有効なカードデータが見つかりませんでした");
-      return;
-    }
-
-    toast.success(`${cards.length}種類のカードを読み込みました。ガチャを選択してスロットを生成してください。`);
-    setIsCSVOpen(false);
-    localStorage.setItem("imported_cards", JSON.stringify(cards));
+  const toggleCard = (cardId: string) => {
+    setSelectedCards((prev) =>
+      prev.includes(cardId) ? prev.filter((id) => id !== cardId) : [...prev, cardId]
+    );
   };
 
   const getStatusBadge = (status: GachaStatus) => {
@@ -191,19 +205,21 @@ export default function GachaManagement() {
   return (
     <AdminLayout title="ガチャ管理">
       <div className="space-y-6">
-        <div className="flex gap-2">
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" />
-                新規作成
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>新規ガチャ作成</DialogTitle>
-              </DialogHeader>
+        <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" />
+              新規作成
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>新規ガチャ作成</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6">
+              {/* 基本情報 */}
               <div className="space-y-4">
+                <h3 className="font-semibold">基本情報</h3>
                 <div>
                   <Label htmlFor="title">タイトル</Label>
                   <Input
@@ -224,13 +240,9 @@ export default function GachaManagement() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="slots">総口数</Label>
-                    <Input
-                      id="slots"
-                      type="number"
-                      value={formData.total_slots}
-                      onChange={(e) => setFormData({ ...formData, total_slots: parseInt(e.target.value) })}
-                    />
+                    <Label>総口数</Label>
+                    <Input value={selectedCards.length} disabled />
+                    <p className="text-xs text-muted-foreground mt-1">選択した商品数で自動設定</p>
                   </div>
                 </div>
                 <div>
@@ -242,60 +254,58 @@ export default function GachaManagement() {
                     placeholder="https://..."
                   />
                 </div>
-                <div>
-                  <Label htmlFor="status">ステータス</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value: GachaStatus) => setFormData({ ...formData, status: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">下書き</SelectItem>
-                      <SelectItem value="active">公開中</SelectItem>
-                      <SelectItem value="sold_out">完売</SelectItem>
-                      <SelectItem value="archived">アーカイブ</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  className="w-full"
-                  onClick={() => createMutation.mutate(formData)}
-                  disabled={createMutation.isPending || !formData.title}
-                >
-                  {createMutation.isPending ? "作成中..." : "作成"}
-                </Button>
               </div>
-            </DialogContent>
-          </Dialog>
 
-          <Dialog open={isCSVOpen} onOpenChange={setIsCSVOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <Upload className="w-4 h-4" />
-                CSVインポート
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>カードCSVインポート</DialogTitle>
-              </DialogHeader>
+              {/* 商品選択 */}
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  CSVファイルには以下の列が必要です：
-                  <br />
-                  <code>id, name, image_url, points</code>
-                </p>
-                <Input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleCSVImport}
-                />
+                <h3 className="font-semibold">商品を選択（{selectedCards.length}件選択中）</h3>
+                {availableCards?.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    利用可能な商品がありません。先に商品マスタからインポートしてください。
+                  </p>
+                ) : (
+                  <div className="border rounded-lg max-h-64 overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">選択</TableHead>
+                          <TableHead>商品名</TableHead>
+                          <TableHead>ポイント</TableHead>
+                          <TableHead>レアリティ</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {availableCards?.map((card) => (
+                          <TableRow key={card.id} className="cursor-pointer" onClick={() => toggleCard(card.id)}>
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedCards.includes(card.id)}
+                                onCheckedChange={() => toggleCard(card.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">{card.name}</TableCell>
+                            <TableCell>{card.conversion_points.toLocaleString()}pt</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{card.rarity}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+
+              <Button
+                className="w-full"
+                onClick={() => createMutation.mutate({ formData, cardIds: selectedCards })}
+                disabled={createMutation.isPending || !formData.title || selectedCards.length === 0}
+              >
+                {createMutation.isPending ? "作成中..." : `${selectedCards.length}件の商品でガチャを作成`}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Card>
           <CardHeader>
@@ -343,7 +353,7 @@ export default function GachaManagement() {
                             variant="ghost"
                             size="icon"
                             onClick={() => {
-                              if (confirm("本当に削除しますか？")) {
+                              if (confirm("本当に削除しますか？関連する商品の紐付けも解除されます。")) {
                                 deleteMutation.mutate(gacha.id);
                               }
                             }}
@@ -360,7 +370,7 @@ export default function GachaManagement() {
           </CardContent>
         </Card>
 
-        {/* Edit Dialog */}
+        {/* 編集ダイアログ */}
         <Dialog open={!!selectedGacha} onOpenChange={(open) => !open && setSelectedGacha(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
@@ -375,25 +385,14 @@ export default function GachaManagement() {
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-price">1回の価格 (pt)</Label>
-                  <Input
-                    id="edit-price"
-                    type="number"
-                    value={formData.price_per_play}
-                    onChange={(e) => setFormData({ ...formData, price_per_play: parseInt(e.target.value) })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-slots">総口数</Label>
-                  <Input
-                    id="edit-slots"
-                    type="number"
-                    value={formData.total_slots}
-                    onChange={(e) => setFormData({ ...formData, total_slots: parseInt(e.target.value) })}
-                  />
-                </div>
+              <div>
+                <Label htmlFor="edit-price">1回の価格 (pt)</Label>
+                <Input
+                  id="edit-price"
+                  type="number"
+                  value={formData.price_per_play}
+                  onChange={(e) => setFormData({ ...formData, price_per_play: parseInt(e.target.value) })}
+                />
               </div>
               <div>
                 <Label htmlFor="edit-banner">バナー画像URL</Label>

@@ -13,6 +13,7 @@ import NotFound from "./pages/NotFound";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import CardMaster from "./pages/admin/CardMaster";
 import GachaManagement from "./pages/admin/GachaManagement";
 import SlotEditor from "./pages/admin/SlotEditor";
 import ShippingManagement from "./pages/admin/ShippingManagement";
@@ -37,6 +38,7 @@ const App = () => (
           
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/cards" element={<CardMaster />} />
           <Route path="/admin/gachas" element={<GachaManagement />} />
           <Route path="/admin/slots" element={<SlotEditor />} />
           <Route path="/admin/shipping" element={<ShippingManagement />} />
