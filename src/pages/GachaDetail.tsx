@@ -27,10 +27,10 @@ type Card = Database["public"]["Tables"]["cards"]["Row"];
 type PrizeTier = Database["public"]["Enums"]["prize_tier"];
 
 const prizeTierStyles: Record<PrizeTier, { bg: string; text: string; glow: string; label: string }> = {
-  S: { bg: "bg-rarity-s", text: "text-foreground", glow: "shadow-[0_0_20px_hsl(var(--rarity-s))]", label: "S賞" },
-  A: { bg: "bg-rarity-a", text: "text-foreground", glow: "shadow-[0_0_15px_hsl(var(--rarity-a))]", label: "A賞" },
-  B: { bg: "bg-rarity-b", text: "text-foreground", glow: "shadow-[0_0_10px_hsl(var(--rarity-b))]", label: "B賞" },
-  miss: { bg: "bg-muted", text: "text-muted-foreground", glow: "", label: "ハズレ" },
+  S: { bg: "bg-red-500", text: "text-white", glow: "shadow-[0_0_20px_rgba(239,68,68,0.5)]", label: "S賞" },
+  A: { bg: "bg-amber-500", text: "text-white", glow: "shadow-[0_0_15px_rgba(245,158,11,0.5)]", label: "A賞" },
+  B: { bg: "bg-blue-500", text: "text-white", glow: "shadow-[0_0_10px_rgba(59,130,246,0.5)]", label: "B賞" },
+  miss: { bg: "bg-gray-500", text: "text-white", glow: "", label: "C賞" },
 };
 
 interface GroupedCard {
@@ -192,7 +192,6 @@ const GachaDetail = () => {
           return acc;
         }, {} as Record<string, GroupedCard>)
       )
-        .filter((card) => card.prizeTier !== "miss")
         .sort((a, b) => {
           const order = { S: 0, A: 1, B: 2, miss: 3 };
           return order[a.prizeTier] - order[b.prizeTier];
@@ -439,7 +438,7 @@ const GachaDetail = () => {
                       </div>
                     </div>
                     <motion.div
-                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "A").length === 1 ? "grid-cols-1 max-w-[150px] mx-auto" : groupedCards.filter(c => c.prizeTier === "A").length === 2 ? "grid-cols-2 max-w-[320px] mx-auto" : "grid-cols-3"}`}
+                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "A").length === 1 ? "grid-cols-1 max-w-[200px] mx-auto" : groupedCards.filter(c => c.prizeTier === "A").length === 2 ? "grid-cols-2 max-w-[420px] mx-auto" : "grid-cols-2"}`}
                       initial="hidden"
                       animate="visible"
                       variants={{
@@ -448,7 +447,7 @@ const GachaDetail = () => {
                       }}
                     >
                       {groupedCards.filter(c => c.prizeTier === "A").map((card) => (
-                        <PrizeCard key={card.id} card={card} compact />
+                        <PrizeCard key={card.id} card={card} />
                       ))}
                     </motion.div>
                   </div>
@@ -471,7 +470,7 @@ const GachaDetail = () => {
                       </span>
                     </div>
                     <motion.div
-                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "B").length === 1 ? "grid-cols-1 max-w-[100px] mx-auto" : groupedCards.filter(c => c.prizeTier === "B").length <= 3 ? "grid-cols-3 max-w-[340px] mx-auto" : "grid-cols-4"}`}
+                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "B").length === 1 ? "grid-cols-1 max-w-[200px] mx-auto" : groupedCards.filter(c => c.prizeTier === "B").length <= 2 ? "grid-cols-2 max-w-[420px] mx-auto" : "grid-cols-2"}`}
                       initial="hidden"
                       animate="visible"
                       variants={{
@@ -480,7 +479,39 @@ const GachaDetail = () => {
                       }}
                     >
                       {groupedCards.filter(c => c.prizeTier === "B").map((card) => (
-                        <PrizeCard key={card.id} card={card} compact />
+                        <PrizeCard key={card.id} card={card} />
+                      ))}
+                    </motion.div>
+                  </div>
+                )}
+
+                {/* C賞セクション（旧ハズレ） */}
+                {groupedCards.filter(c => c.prizeTier === "miss").length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-center mb-4">
+                      <span 
+                        className="text-3xl font-black tracking-wider"
+                        style={{
+                          background: "linear-gradient(180deg, #9e9e9e 0%, #757575 30%, #616161 50%, #424242 70%, #212121 100%)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
+                        }}
+                      >
+                        C賞
+                      </span>
+                    </div>
+                    <motion.div
+                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "miss").length === 1 ? "grid-cols-1 max-w-[100px] mx-auto" : groupedCards.filter(c => c.prizeTier === "miss").length <= 3 ? "grid-cols-3 max-w-[340px] mx-auto" : "grid-cols-4"}`}
+                      initial="hidden"
+                      animate="visible"
+                      variants={{
+                        hidden: {},
+                        visible: { transition: { staggerChildren: 0.02 } },
+                      }}
+                    >
+                      {groupedCards.filter(c => c.prizeTier === "miss").map((card) => (
+                        <PrizeCard key={card.id} card={card} />
                       ))}
                     </motion.div>
                   </div>
@@ -510,6 +541,19 @@ const GachaDetail = () => {
               </div>
             </div>
           </section>
+
+          {/* Notice Section */}
+          {(gacha as any).notice_text && (
+            <section className="bg-amber-50 dark:bg-amber-950/30 rounded-xl p-4 border border-amber-200 dark:border-amber-800 mt-4">
+              <h3 className="font-bold text-foreground mb-2 flex items-center gap-2">
+                <span className="text-amber-500">⚠️</span>
+                注意事項
+              </h3>
+              <p className="text-sm text-muted-foreground whitespace-pre-line">
+                {(gacha as any).notice_text}
+              </p>
+            </section>
+          )}
         </main>
 
         {/* Fixed Bottom Bar */}
