@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Upload, Trash2, Package, Search } from "lucide-react";
+import { Upload, Trash2, Package, Search, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -47,6 +47,8 @@ export default function CardMaster() {
   const queryClient = useQueryClient();
   const [isCSVOpen, setIsCSVOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isSpreadsheetOpen, setIsSpreadsheetOpen] = useState(false);
+  const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
   const [importCategory, setImportCategory] = useState<CardCategory | null>(null);
   const [deleteCategory, setDeleteCategory] = useState<CardCategory | null>(null);
   const [filterCategory, setFilterCategory] = useState<CardCategory | "all">("all");
@@ -330,6 +332,103 @@ export default function CardMaster() {
     importMutation.mutate({ cardsData, category: importCategory });
   };
 
+  // スプレッドシートからインポート
+  const handleSpreadsheetImport = async () => {
+    if (!spreadsheetUrl) {
+      toast.error("スプレッドシートのURLを入力してください");
+      return;
+    }
+
+    if (!importCategory) {
+      toast.error("カテゴリを選択してください");
+      return;
+    }
+
+    toast.info("スプレッドシートを読み込み中...");
+
+    try {
+      // Google SheetsのURLをCSV出力形式に変換
+      let csvUrl = spreadsheetUrl;
+      
+      // 公開URLのパターンを検出して変換
+      if (spreadsheetUrl.includes("docs.google.com/spreadsheets")) {
+        // /edit や /pubhtml などを /export?format=csv に変換
+        const match = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        if (match) {
+          const sheetId = match[1];
+          // gidパラメータがあれば取得
+          const gidMatch = spreadsheetUrl.match(/gid=(\d+)/);
+          const gid = gidMatch ? gidMatch[1] : "0";
+          csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+        }
+      }
+
+      const response = await fetch(csvUrl);
+      if (!response.ok) {
+        throw new Error("スプレッドシートの取得に失敗しました。公開設定を確認してください。");
+      }
+
+      const text = await response.text();
+      const lines = text.split("\n").filter((line) => line.trim());
+      const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/^\ufeff/, ''));
+
+      // Find column indices
+      const idIndex = headers.findIndex(h => h === 'id' || h === 'カードid' || h === 'カードID');
+      const nameIndex = headers.findIndex(h => h === 'name' || h === '商品名' || h === '名前');
+      const imageIndex = headers.findIndex(h => h === 'image_url' || h === '画像url' || h === '画像');
+      const pointsIndex = headers.findIndex(h => h === 'points' || h === 'ポイント' || h === 'pt' || h === 'conversion_points');
+
+      if (nameIndex === -1) {
+        toast.error("「name」または「商品名」列が見つかりません");
+        return;
+      }
+
+      // 画像URL自動生成用のベースURL（idがある場合に使用）
+      const IMAGE_BASE_URL = "https://image.iranoan.com/card/";
+      const IMAGE_SUFFIX = "_small.jpg?d=2026012501";
+
+      const cardsData: Array<{ name: string; image_url: string; conversion_points: number; category: CardCategory }> = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i]);
+        
+        const name = values[nameIndex];
+        if (!name) continue;
+
+        // 画像URLの決定: id列があれば自動生成、なければimage_url列を使用
+        let image_url = "";
+        if (idIndex >= 0 && values[idIndex]) {
+          const cardId = values[idIndex].trim();
+          image_url = `${IMAGE_BASE_URL}${cardId}${IMAGE_SUFFIX}`;
+        } else if (imageIndex >= 0) {
+          image_url = values[imageIndex] || "";
+        }
+
+        // カンマ区切りの数値に対応
+        const pointsStr = pointsIndex >= 0 ? (values[pointsIndex] || "").replace(/,/g, '') : "0";
+        const points = parseInt(pointsStr) || 0;
+
+        cardsData.push({
+          name,
+          image_url,
+          conversion_points: points,
+          category: importCategory,
+        });
+      }
+
+      if (cardsData.length === 0) {
+        toast.error("有効な商品データが見つかりませんでした");
+        return;
+      }
+
+      toast.info(`${cardsData.length.toLocaleString()}件の商品を読み込みました。既存データを置き換えます...`);
+      setIsSpreadsheetOpen(false);
+      importMutation.mutate({ cardsData, category: importCategory });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "スプレッドシートの読み込みに失敗しました");
+    }
+  };
+
   return (
     <AdminLayout title="商品マスタ">
       <div className="space-y-6">
@@ -376,6 +475,69 @@ export default function CardMaster() {
                   onChange={handleCSVImport}
                   disabled={importMutation.isPending || !importCategory}
                 />
+                <p className="text-sm text-muted-foreground">
+                  ※ 同じカテゴリの既存データは全て置き換えられます
+                </p>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* スプレッドシート連携ダイアログ */}
+          <Dialog open={isSpreadsheetOpen} onOpenChange={(open) => { setIsSpreadsheetOpen(open); if (!open) { setImportCategory(null); setSpreadsheetUrl(""); } }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <FileSpreadsheet className="w-4 h-4" />
+                スプレッドシート連携
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Googleスプレッドシートから取得</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>カテゴリを選択（必須）</Label>
+                  <Select
+                    value={importCategory || ""}
+                    onValueChange={(value: CardCategory) => setImportCategory(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="カテゴリを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yugioh">遊戯王</SelectItem>
+                      <SelectItem value="pokemon">ポケモン</SelectItem>
+                      <SelectItem value="weiss">ヴァイスシュバルツ</SelectItem>
+                      <SelectItem value="onepiece">ワンピース</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>スプレッドシートURL</Label>
+                  <Input
+                    placeholder="https://docs.google.com/spreadsheets/d/..."
+                    value={spreadsheetUrl}
+                    onChange={(e) => setSpreadsheetUrl(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ※ スプレッドシートを「ウェブに公開」してください
+                    <br />
+                    （ファイル → 共有 → ウェブに公開）
+                  </p>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  必要な列: <code>id, name, points</code>
+                  <br />
+                  <span className="text-xs">※ id列から画像URLが自動生成されます</span>
+                </p>
+                <Button
+                  className="w-full gap-2"
+                  disabled={!importCategory || !spreadsheetUrl || importMutation.isPending}
+                  onClick={handleSpreadsheetImport}
+                >
+                  <RefreshCw className={`w-4 h-4 ${importMutation.isPending ? 'animate-spin' : ''}`} />
+                  データを取得
+                </Button>
                 <p className="text-sm text-muted-foreground">
                   ※ 同じカテゴリの既存データは全て置き換えられます
                 </p>
