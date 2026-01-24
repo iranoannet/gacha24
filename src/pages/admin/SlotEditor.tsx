@@ -56,6 +56,7 @@ export default function SlotEditor() {
   const [isAddCardOpen, setIsAddCardOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<SlotWithCard | null>(null);
   const [lockedSlots, setLockedSlots] = useState<Set<string>>(new Set());
+  const [drawMode, setDrawMode] = useState<"random" | "ordered">("random");
   const [newCard, setNewCard] = useState({
     name: "",
     rarity: "C" as CardRarity,
@@ -105,6 +106,13 @@ export default function SlotEditor() {
     },
     enabled: !!selectedGachaId,
   });
+
+  // Sort slots by points (high to low) for display
+  const sortedSlots = slots ? [...slots].sort((a, b) => {
+    const pointsA = a.cards?.conversion_points || 0;
+    const pointsB = b.cards?.conversion_points || 0;
+    return pointsB - pointsA;
+  }) : [];
 
   const addCardMutation = useMutation({
     mutationFn: async (cardData: typeof newCard) => {
@@ -341,10 +349,30 @@ export default function SlotEditor() {
                     スロット配置 ({slots?.length || 0}/{selectedGacha?.total_slots || 0})
                   </CardTitle>
                   <p className="text-sm text-muted-foreground mt-1">
-                    スロット番号順に排出されます。ロックしたスロットはランダム生成時に保持されます。
+                    {drawMode === "random" 
+                      ? "ランダムに排出されます。" 
+                      : "スロット番号順に排出されます。ロックしたスロットはランダム生成時に保持されます。"}
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <div className="flex border rounded-lg overflow-hidden">
+                    <Button
+                      variant={drawMode === "random" ? "default" : "ghost"}
+                      size="sm"
+                      className="rounded-none"
+                      onClick={() => setDrawMode("random")}
+                    >
+                      ランダム
+                    </Button>
+                    <Button
+                      variant={drawMode === "ordered" ? "default" : "ghost"}
+                      size="sm"
+                      className="rounded-none"
+                      onClick={() => setDrawMode("ordered")}
+                    >
+                      排出順
+                    </Button>
+                  </div>
                   <Button
                     variant="outline"
                     onClick={() => generateSlotsMutation.mutate()}
@@ -374,44 +402,48 @@ export default function SlotEditor() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-16">順番</TableHead>
-                          <TableHead className="w-20">スロット#</TableHead>
+                          {drawMode === "ordered" && <TableHead className="w-16">順番</TableHead>}
+                          {drawMode === "ordered" && <TableHead className="w-20">スロット#</TableHead>}
                           <TableHead>カード</TableHead>
                           <TableHead>レアリティ</TableHead>
                           <TableHead>還元pt</TableHead>
                           <TableHead>状態</TableHead>
-                          <TableHead className="w-40">操作</TableHead>
+                          {drawMode === "ordered" && <TableHead className="w-40">操作</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {slots?.slice(0, 100).map((slot, index) => (
+                        {(drawMode === "random" ? sortedSlots : slots)?.slice(0, 100).map((slot, index) => (
                           <TableRow 
                             key={slot.id}
-                            className={lockedSlots.has(slot.id) ? "bg-amber-50 dark:bg-amber-950/30" : ""}
+                            className={drawMode === "ordered" && lockedSlots.has(slot.id) ? "bg-amber-50 dark:bg-amber-950/30" : ""}
                           >
-                            <TableCell>
-                              <div className="flex flex-col gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  disabled={index === 0 || slot.is_drawn}
-                                  onClick={() => moveSlot(slot, "up")}
-                                >
-                                  <ArrowUp className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  disabled={index === (slots?.length || 0) - 1 || slot.is_drawn}
-                                  onClick={() => moveSlot(slot, "down")}
-                                >
-                                  <ArrowDown className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-mono font-bold">{slot.slot_number}</TableCell>
+                            {drawMode === "ordered" && (
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    disabled={index === 0 || slot.is_drawn}
+                                    onClick={() => moveSlot(slot, "up")}
+                                  >
+                                    <ArrowUp className="w-3 h-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    disabled={index === (slots?.length || 0) - 1 || slot.is_drawn}
+                                    onClick={() => moveSlot(slot, "down")}
+                                  >
+                                    <ArrowDown className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
+                            {drawMode === "ordered" && (
+                              <TableCell className="font-mono font-bold">{slot.slot_number}</TableCell>
+                            )}
                             <TableCell className="flex items-center gap-2">
                               {slot.cards?.image_url && (
                                 <img 
@@ -437,34 +469,36 @@ export default function SlotEditor() {
                                 <Badge variant="outline">未排出</Badge>
                               )}
                             </TableCell>
-                            <TableCell>
-                              <div className="flex gap-1">
-                                <Button
-                                  variant={lockedSlots.has(slot.id) ? "default" : "ghost"}
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => toggleLock(slot.id)}
-                                  disabled={slot.is_drawn}
-                                  title={lockedSlots.has(slot.id) ? "ロック解除" : "ロック"}
-                                >
-                                  {lockedSlots.has(slot.id) ? (
-                                    <Lock className="w-4 h-4" />
-                                  ) : (
-                                    <Unlock className="w-4 h-4" />
-                                  )}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => setEditingSlot(slot)}
-                                  disabled={slot.is_drawn}
-                                  title="カード変更"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
+                            {drawMode === "ordered" && (
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant={lockedSlots.has(slot.id) ? "default" : "ghost"}
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => toggleLock(slot.id)}
+                                    disabled={slot.is_drawn}
+                                    title={lockedSlots.has(slot.id) ? "ロック解除" : "ロック"}
+                                  >
+                                    {lockedSlots.has(slot.id) ? (
+                                      <Lock className="w-4 h-4" />
+                                    ) : (
+                                      <Unlock className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => setEditingSlot(slot)}
+                                    disabled={slot.is_drawn}
+                                    title="カード変更"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))}
                       </TableBody>
