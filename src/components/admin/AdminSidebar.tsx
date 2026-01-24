@@ -8,7 +8,8 @@ import {
   BarChart3,
   LogOut,
   Settings,
-  Database
+  Database,
+  CreditCard
 } from "lucide-react";
 import {
   Sidebar,
@@ -29,6 +30,7 @@ const menuItems = [
   { title: "ガチャ管理", url: "/admin/gachas", icon: Package },
   { title: "スロット編集", url: "/admin/slots", icon: Layers },
   { title: "配送管理", url: "/admin/shipping", icon: Truck },
+  { title: "決済管理", url: "/admin/payments", icon: CreditCard },
   { title: "ユーザー管理", url: "/admin/users", icon: Users },
   { title: "売上分析", url: "/admin/analytics", icon: BarChart3 },
 ];

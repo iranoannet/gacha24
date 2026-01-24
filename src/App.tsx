@@ -20,6 +20,7 @@ import CardMaster from "./pages/admin/CardMaster";
 import GachaManagement from "./pages/admin/GachaManagement";
 import SlotEditor from "./pages/admin/SlotEditor";
 import ShippingManagement from "./pages/admin/ShippingManagement";
+import PaymentManagement from "./pages/admin/PaymentManagement";
 import UserManagement from "./pages/admin/UserManagement";
 import Analytics from "./pages/admin/Analytics";
 
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/admin/gachas" element={<AdminProtectedRoute><GachaManagement /></AdminProtectedRoute>} />
             <Route path="/admin/slots" element={<AdminProtectedRoute><SlotEditor /></AdminProtectedRoute>} />
             <Route path="/admin/shipping" element={<AdminProtectedRoute><ShippingManagement /></AdminProtectedRoute>} />
+            <Route path="/admin/payments" element={<AdminProtectedRoute><PaymentManagement /></AdminProtectedRoute>} />
             <Route path="/admin/users" element={<AdminProtectedRoute><UserManagement /></AdminProtectedRoute>} />
             <Route path="/admin/analytics" element={<AdminProtectedRoute><Analytics /></AdminProtectedRoute>} />
             
