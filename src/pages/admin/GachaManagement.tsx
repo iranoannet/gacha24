@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Upload, X, ArrowRight, ArrowLeft, Search } from "lucide-react";
+import { Plus, Edit, Trash2, Upload, X, ArrowRight, ArrowLeft, Search, Copy } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -56,6 +56,7 @@ interface SelectedCardItem {
 export default function GachaManagement() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [createStep, setCreateStep] = useState<"select" | "configure">("select");
   const [selectedGacha, setSelectedGacha] = useState<GachaMaster | null>(null);
   const [selectedItems, setSelectedItems] = useState<SelectedCardItem[]>([]);
@@ -63,6 +64,7 @@ export default function GachaManagement() {
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<CardCategory | null>(null);
+  const [isCopying, setIsCopying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
@@ -241,6 +243,82 @@ export default function GachaManagement() {
     setSelectedCategory(null);
   };
 
+  // 過去パックからコピー
+  const handleCopyFromGacha = async (gachaId: string) => {
+    setIsCopying(true);
+    try {
+      // ガチャ情報を取得
+      const { data: gacha, error: gachaError } = await supabase
+        .from("gacha_masters")
+        .select("*")
+        .eq("id", gachaId)
+        .single();
+      
+      if (gachaError) throw gachaError;
+
+      // そのガチャに紐付いたカード情報を取得（スロットから集計）
+      const { data: slots, error: slotsError } = await supabase
+        .from("gacha_slots")
+        .select("card_id")
+        .eq("gacha_id", gachaId);
+      
+      if (slotsError) throw slotsError;
+
+      // card_idごとにカウント
+      const cardCounts: Record<string, number> = {};
+      slots?.forEach((slot) => {
+        if (slot.card_id) {
+          cardCounts[slot.card_id] = (cardCounts[slot.card_id] || 0) + 1;
+        }
+      });
+
+      // カード情報を取得
+      const cardIds = Object.keys(cardCounts);
+      if (cardIds.length === 0) {
+        toast.error("このパックには商品がありません");
+        setIsCopying(false);
+        return;
+      }
+
+      const { data: cards, error: cardsError } = await supabase
+        .from("cards")
+        .select("*")
+        .in("id", cardIds);
+      
+      if (cardsError) throw cardsError;
+
+      // SelectedCardItemの形式に変換
+      const copiedItems: SelectedCardItem[] = (cards || []).map((card) => ({
+        card: card,
+        quantity: cardCounts[card.id] || 1,
+        prizeTier: (card.prize_tier as PrizeTier) || "miss",
+      }));
+
+      // フォームにセット
+      setFormData({
+        title: gacha.title + "（コピー）",
+        price_per_play: gacha.price_per_play,
+        total_slots: 100,
+        banner_url: gacha.banner_url || "",
+        pop_image_url: gacha.pop_image_url || "",
+        status: "draft",
+        category: (gacha as any).category || null,
+      });
+      setSelectedCategory((gacha as any).category || null);
+      setSelectedItems(copiedItems);
+      setBannerPreview(gacha.banner_url || null);
+      setCreateStep("configure");
+      setIsCopyOpen(false);
+      setIsCreateOpen(true);
+      
+      toast.success(`${gacha.title}の構成をコピーしました`);
+    } catch (error) {
+      toast.error("コピーに失敗しました: " + (error as Error).message);
+    } finally {
+      setIsCopying(false);
+    }
+  };
+
   const handleEdit = (gacha: GachaMaster) => {
     setSelectedGacha(gacha);
     setFormData({
@@ -352,13 +430,14 @@ export default function GachaManagement() {
   return (
     <AdminLayout title="ガチャ管理">
       <div className="space-y-6">
-        <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              新規作成
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="w-4 h-4" />
+                新規作成
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -649,6 +728,70 @@ export default function GachaManagement() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* 過去パックからコピーダイアログ */}
+        <Dialog open={isCopyOpen} onOpenChange={setIsCopyOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="gap-2">
+              <Copy className="w-4 h-4" />
+              過去パックからコピー
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[70vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>過去パックからコピー</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                コピーしたいパックを選択してください。商品構成と設定がコピーされます。
+              </p>
+              {isLoading ? (
+                <p className="text-muted-foreground">読み込み中...</p>
+              ) : gachas?.length === 0 ? (
+                <p className="text-muted-foreground">コピー可能なパックがありません</p>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>タイトル</TableHead>
+                        <TableHead>価格</TableHead>
+                        <TableHead>総口数</TableHead>
+                        <TableHead>作成日</TableHead>
+                        <TableHead className="w-24">操作</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {gachas?.map((gacha) => (
+                        <TableRow key={gacha.id}>
+                          <TableCell className="font-medium">{gacha.title}</TableCell>
+                          <TableCell>{gacha.price_per_play.toLocaleString()}pt</TableCell>
+                          <TableCell>{gacha.total_slots}口</TableCell>
+                          <TableCell>
+                            {new Date(gacha.created_at).toLocaleDateString("ja-JP")}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1"
+                              disabled={isCopying}
+                              onClick={() => handleCopyFromGacha(gacha.id)}
+                            >
+                              <Copy className="w-3 h-3" />
+                              コピー
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
 
         <Card>
           <CardHeader>
