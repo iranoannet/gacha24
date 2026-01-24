@@ -1,1 +1,4 @@
 project_id = "xhdmdkxslvyuoqpnuehu"
+
+[functions.bulk-delete-cards]
+verify_jwt = false
