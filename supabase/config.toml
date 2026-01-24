@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.play-gacha]
 verify_jwt = false
+
+[functions.bulk-convert-points]
+verify_jwt = false
