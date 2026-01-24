@@ -283,49 +283,30 @@ const Inventory = () => {
     },
   });
 
-  // 一括ポイント変換
+  // 一括ポイント変換（Edge Function使用で高速化）
   const handleBulkConvert = async () => {
     if (!unselectedItems || unselectedItems.length === 0) return;
     
     setIsBulkConverting(true);
     try {
-      let totalPoints = 0;
-      
-      // すべてのアイテムをポイント変換
-      for (const item of unselectedItems) {
-        const { error: actionError } = await supabase
-          .from("inventory_actions")
-          .insert({
-            user_id: user!.id,
-            slot_id: item.slotId,
-            card_id: item.cardId,
-            action_type: "conversion",
-            status: "completed",
-            converted_points: item.conversionPoints,
-            processed_at: new Date().toISOString(),
-          });
-        if (actionError) throw actionError;
-        totalPoints += item.conversionPoints;
-      }
+      // Edge Functionに一括処理を依頼
+      const items = unselectedItems.map(item => ({
+        slotId: item.slotId,
+        cardId: item.cardId,
+        conversionPoints: item.conversionPoints,
+      }));
 
-      // ポイント一括追加
-      const { data: profile, error: fetchError } = await supabase
-        .from("profiles")
-        .select("points_balance")
-        .eq("user_id", user!.id)
-        .single();
-      if (fetchError) throw fetchError;
+      const { data, error } = await supabase.functions.invoke("bulk-convert-points", {
+        body: { items },
+      });
 
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ points_balance: (profile?.points_balance || 0) + totalPoints })
-        .eq("user_id", user!.id);
-      if (updateError) throw updateError;
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       queryClient.invalidateQueries({ queryKey: ["inventory-unselected"] });
       queryClient.invalidateQueries({ queryKey: ["user-profile"] });
       queryClient.invalidateQueries({ queryKey: ["user-profile-header"] });
-      toast.success(`${unselectedItems.length}件を一括変換！ ${totalPoints.toLocaleString()}ptを獲得しました`);
+      toast.success(`${data.convertedCount}件を一括変換！ ${data.totalPoints.toLocaleString()}ptを獲得しました`);
     } catch (error: any) {
       toast.error("エラー: " + error.message);
     } finally {
