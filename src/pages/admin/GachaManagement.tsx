@@ -70,6 +70,11 @@ export default function GachaManagement() {
   const [isAdding, setIsAdding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  const defaultNotice = `【最低保証5pt】
+【注意事項】
+当たりカード含め、初期傷など一部損傷箇所がある場合がございます。商品の返金・交換はできません。
+上記、ご了承の上でご購入をお願い致します。`;
+
   const [formData, setFormData] = useState({
     title: "",
     price_per_play: 500,
@@ -78,6 +83,7 @@ export default function GachaManagement() {
     pop_image_url: "",
     status: "draft" as GachaStatus,
     category: null as CardCategory | null,
+    notice_text: defaultNotice,
   });
 
   // ガチャ一覧
@@ -237,6 +243,7 @@ export default function GachaManagement() {
       pop_image_url: "",
       status: "draft",
       category: null,
+      notice_text: defaultNotice,
     });
     setSelectedItems([]);
     setBannerFile(null);
@@ -389,6 +396,7 @@ export default function GachaManagement() {
         pop_image_url: gacha.pop_image_url || "",
         status: "draft",
         category: (gacha as any).category || null,
+        notice_text: (gacha as any).notice_text || defaultNotice,
       });
       setSelectedCategory((gacha as any).category || null);
       setSelectedItems(copiedItems);
@@ -415,6 +423,7 @@ export default function GachaManagement() {
       pop_image_url: gacha.pop_image_url || "",
       status: gacha.status,
       category: (gacha as any).category || null,
+      notice_text: (gacha as any).notice_text || defaultNotice,
     });
     setBannerFile(null);
     setBannerPreview(gacha.banner_url || null);
@@ -1030,6 +1039,16 @@ export default function GachaManagement() {
                     <SelectItem value="archived">アーカイブ</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit-notice">注意書き</Label>
+                <textarea
+                  id="edit-notice"
+                  value={formData.notice_text}
+                  onChange={(e) => setFormData({ ...formData, notice_text: e.target.value })}
+                  className="w-full min-h-[100px] p-2 text-sm border rounded-md bg-background"
+                  placeholder="注意事項を入力..."
+                />
               </div>
               <Button
                 className="w-full"

@@ -91,6 +91,7 @@ export type Database = {
           category: Database["public"]["Enums"]["card_category"] | null
           created_at: string
           id: string
+          notice_text: string | null
           pop_image_url: string | null
           price_per_play: number
           remaining_slots: number
@@ -104,6 +105,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["card_category"] | null
           created_at?: string
           id?: string
+          notice_text?: string | null
           pop_image_url?: string | null
           price_per_play?: number
           remaining_slots?: number
@@ -117,6 +119,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["card_category"] | null
           created_at?: string
           id?: string
+          notice_text?: string | null
           pop_image_url?: string | null
           price_per_play?: number
           remaining_slots?: number
