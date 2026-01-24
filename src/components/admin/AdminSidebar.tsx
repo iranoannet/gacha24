@@ -9,7 +9,8 @@ import {
   LogOut,
   Settings,
   Database,
-  CreditCard
+  CreditCard,
+  Image
 } from "lucide-react";
 import {
   Sidebar,
@@ -29,6 +30,7 @@ const menuItems = [
   { title: "商品マスタ", url: "/admin/cards", icon: Database },
   { title: "ガチャ管理", url: "/admin/gachas", icon: Package },
   { title: "スロット編集", url: "/admin/slots", icon: Layers },
+  { title: "バナー管理", url: "/admin/banners", icon: Image },
   { title: "配送管理", url: "/admin/shipping", icon: Truck },
   { title: "決済管理", url: "/admin/payments", icon: CreditCard },
   { title: "ユーザー管理", url: "/admin/users", icon: Users },
