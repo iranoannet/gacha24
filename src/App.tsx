@@ -14,6 +14,8 @@ import Reports from "./pages/Reports";
 import MyPage from "./pages/MyPage";
 import ShippingAddress from "./pages/ShippingAddress";
 import NotFound from "./pages/NotFound";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import LegalNotice from "./pages/LegalNotice";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -43,6 +45,8 @@ const App = () => (
             <Route path="/reports" element={<Reports />} />
             <Route path="/mypage" element={<MyPage />} />
             <Route path="/mypage/address" element={<ShippingAddress />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/legal" element={<LegalNotice />} />
             
             {/* Admin Routes - Protected */}
             <Route path="/admin" element={<AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>} />
