@@ -275,6 +275,7 @@ export default function CardMaster() {
     const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/^\ufeff/, ''));
 
     // Find column indices
+    const idIndex = headers.findIndex(h => h === 'id' || h === 'カードid' || h === 'カードID');
     const nameIndex = headers.findIndex(h => h === 'name' || h === '商品名' || h === '名前');
     const imageIndex = headers.findIndex(h => h === 'image_url' || h === '画像url' || h === '画像');
     const pointsIndex = headers.findIndex(h => h === 'points' || h === 'ポイント' || h === 'pt' || h === 'conversion_points');
@@ -284,6 +285,10 @@ export default function CardMaster() {
       return;
     }
 
+    // 画像URL自動生成用のベースURL（idがある場合に使用）
+    const IMAGE_BASE_URL = "https://image.iranoan.com/card/";
+    const IMAGE_SUFFIX = "_small.jpg?d=2026012501";
+
     const cardsData: Array<{ name: string; image_url: string; conversion_points: number; category: CardCategory }> = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -292,7 +297,17 @@ export default function CardMaster() {
       const name = values[nameIndex];
       if (!name) continue;
 
-      const image_url = imageIndex >= 0 ? values[imageIndex] || "" : "";
+      // 画像URLの決定: id列があれば自動生成、なければimage_url列を使用
+      let image_url = "";
+      if (idIndex >= 0 && values[idIndex]) {
+        // id列から画像URLを自動生成
+        const cardId = values[idIndex].trim();
+        image_url = `${IMAGE_BASE_URL}${cardId}${IMAGE_SUFFIX}`;
+      } else if (imageIndex >= 0) {
+        // 従来通りimage_url列を使用
+        image_url = values[imageIndex] || "";
+      }
+
       // カンマ区切りの数値に対応（例: 110,200 → 110200）
       const pointsStr = pointsIndex >= 0 ? (values[pointsIndex] || "").replace(/,/g, '') : "0";
       const points = parseInt(pointsStr) || 0;
@@ -351,7 +366,9 @@ export default function CardMaster() {
                 <p className="text-sm text-muted-foreground">
                   CSVファイルには以下の列が必要です：
                   <br />
-                  <code>name, image_url, points</code>
+                  <code>id, name, points</code>
+                  <br />
+                  <span className="text-xs">※ id列があれば画像URLは自動生成されます</span>
                 </p>
                 <Input
                   type="file"
