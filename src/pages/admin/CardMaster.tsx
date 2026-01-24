@@ -173,7 +173,9 @@ export default function CardMaster() {
       if (!name) continue;
 
       const image_url = imageIndex >= 0 ? values[imageIndex] || "" : "";
-      const points = pointsIndex >= 0 ? parseInt(values[pointsIndex]) || 0 : 0;
+      // カンマ区切りの数値に対応（例: 110,200 → 110200）
+      const pointsStr = pointsIndex >= 0 ? (values[pointsIndex] || "").replace(/,/g, '') : "0";
+      const points = parseInt(pointsStr) || 0;
 
       cardsData.push({
         name,
