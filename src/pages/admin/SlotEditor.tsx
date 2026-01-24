@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Shuffle, Lock, Unlock, Save, Plus, Edit2 } from "lucide-react";
+import { Shuffle, Save, Plus, Edit2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -47,7 +47,6 @@ const rarityColors: Record<CardRarity, string> = {
 
 interface SlotWithCard extends GachaSlot {
   cards: CardType | null;
-  isLocked?: boolean;
 }
 
 export default function SlotEditor() {
@@ -55,7 +54,7 @@ export default function SlotEditor() {
   const [selectedGachaId, setSelectedGachaId] = useState<string>("");
   const [isAddCardOpen, setIsAddCardOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<SlotWithCard | null>(null);
-  const [lockedSlots, setLockedSlots] = useState<Set<string>>(new Set());
+  
   const [drawMode, setDrawMode] = useState<"random" | "ordered">("random");
   const [slotNumberEdits, setSlotNumberEdits] = useState<Record<string, number>>({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -241,28 +240,9 @@ export default function SlotEditor() {
       const gacha = gachas?.find((g) => g.id === selectedGachaId);
       if (!gacha) return;
 
-      // Get current slots to preserve locked ones
-      const currentSlots = slots || [];
-      const lockedSlotData = currentSlots.filter(s => lockedSlots.has(s.id));
-      const lockedSlotNumbers = new Set(lockedSlotData.map(s => s.slot_number));
+      // Delete all existing slots
+      await supabase.from("gacha_slots").delete().eq("gacha_id", selectedGachaId);
 
-      // Delete only unlocked slots
-      if (lockedSlots.size > 0) {
-        const unlockedSlotIds = currentSlots
-          .filter(s => !lockedSlots.has(s.id))
-          .map(s => s.id);
-        
-        if (unlockedSlotIds.length > 0) {
-          await supabase
-            .from("gacha_slots")
-            .delete()
-            .in("id", unlockedSlotIds);
-        }
-      } else {
-        await supabase.from("gacha_slots").delete().eq("gacha_id", selectedGachaId);
-      }
-
-      // Create slot assignments for non-locked slots
       const slotAssignments: { gacha_id: string; slot_number: number; card_id: string }[] = [];
       const totalSlots = gacha.total_slots;
       const cardPool: CardType[] = [];
@@ -280,25 +260,22 @@ export default function SlotEditor() {
         cardPool.push(randomCard);
       }
 
-      // Shuffle the pool
+      // Shuffle the card pool (Fisher-Yates)
       for (let i = cardPool.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [cardPool[i], cardPool[j]] = [cardPool[j], cardPool[i]];
       }
 
-      // Generate random slot numbers within 1 to totalSlots (avoiding locked ones)
-      const generateRandomSlotNumbers = (count: number, excludeNumbers: Set<number>): number[] => {
-        const numbers: number[] = [];
+      // Generate random slot numbers within 1 to totalSlots
+      const generateRandomSlotNumbers = (count: number): number[] => {
         const availableNumbers: number[] = [];
         
         // Create pool of available numbers from 1 to totalSlots
         for (let i = 1; i <= totalSlots; i++) {
-          if (!excludeNumbers.has(i)) {
-            availableNumbers.push(i);
-          }
+          availableNumbers.push(i);
         }
         
-        // Shuffle and pick required count
+        // Shuffle (Fisher-Yates)
         for (let i = availableNumbers.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [availableNumbers[i], availableNumbers[j]] = [availableNumbers[j], availableNumbers[i]];
@@ -307,11 +284,10 @@ export default function SlotEditor() {
         return availableNumbers.slice(0, count);
       };
 
-      const slotsNeeded = totalSlots - lockedSlotNumbers.size;
-      const randomSlotNumbers = generateRandomSlotNumbers(slotsNeeded, lockedSlotNumbers);
+      const randomSlotNumbers = generateRandomSlotNumbers(totalSlots);
 
       // Assign cards to random slot numbers
-      for (let i = 0; i < slotsNeeded; i++) {
+      for (let i = 0; i < totalSlots; i++) {
         slotAssignments.push({
           gacha_id: selectedGachaId,
           slot_number: randomSlotNumbers[i],
@@ -326,22 +302,10 @@ export default function SlotEditor() {
     },
     onSuccess: () => {
       refetchSlots();
-      toast.success("スロットを生成しました（ロック済みスロットは保持）");
+      toast.success("スロットをランダム生成しました");
     },
     onError: (error) => toast.error("エラー: " + error.message),
   });
-
-  const toggleLock = (slotId: string) => {
-    setLockedSlots(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(slotId)) {
-        newSet.delete(slotId);
-      } else {
-        newSet.add(slotId);
-      }
-      return newSet;
-    });
-  };
 
   return (
     <AdminLayout title="スロット編集（排出順設定）">
@@ -351,10 +315,7 @@ export default function SlotEditor() {
             <CardTitle>ガチャ選択</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={selectedGachaId} onValueChange={(v) => {
-              setSelectedGachaId(v);
-              setLockedSlots(new Set());
-            }}>
+            <Select value={selectedGachaId} onValueChange={setSelectedGachaId}>
               <SelectTrigger className="w-full max-w-md">
                 <SelectValue placeholder="ガチャを選択..." />
               </SelectTrigger>
@@ -460,14 +421,6 @@ export default function SlotEditor() {
                 </div>
               </CardHeader>
               <CardContent>
-                {lockedSlots.size > 0 && (
-                  <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
-                      <Lock className="w-4 h-4 inline mr-1" />
-                      {lockedSlots.size}件のスロットがロックされています。ランダム生成時にこれらは保持されます。
-                    </p>
-                  </div>
-                )}
                 
                 {slots?.length === 0 ? (
                   <p className="text-muted-foreground">
@@ -483,17 +436,14 @@ export default function SlotEditor() {
                           <TableHead>レアリティ</TableHead>
                           <TableHead>還元pt</TableHead>
                           <TableHead>状態</TableHead>
-                          {drawMode === "ordered" && <TableHead className="w-32">操作</TableHead>}
+                          {drawMode === "ordered" && <TableHead className="w-16">操作</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {sortedSlots
                           .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                           .map((slot) => (
-                          <TableRow 
-                            key={slot.id}
-                            className={drawMode === "ordered" && lockedSlots.has(slot.id) ? "bg-amber-50 dark:bg-amber-950/30" : ""}
-                          >
+                          <TableRow key={slot.id}>
                             {drawMode === "ordered" && (
                               <TableCell>
                                 <Input
@@ -535,32 +485,16 @@ export default function SlotEditor() {
                             </TableCell>
                             {drawMode === "ordered" && (
                               <TableCell>
-                                <div className="flex gap-1">
-                                  <Button
-                                    variant={lockedSlots.has(slot.id) ? "default" : "ghost"}
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => toggleLock(slot.id)}
-                                    disabled={slot.is_drawn}
-                                    title={lockedSlots.has(slot.id) ? "ロック解除" : "ロック"}
-                                  >
-                                    {lockedSlots.has(slot.id) ? (
-                                      <Lock className="w-4 h-4" />
-                                    ) : (
-                                      <Unlock className="w-4 h-4" />
-                                    )}
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => setEditingSlot(slot)}
-                                    disabled={slot.is_drawn}
-                                    title="カード変更"
-                                  >
-                                    <Edit2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setEditingSlot(slot)}
+                                  disabled={slot.is_drawn}
+                                  title="カード変更"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
                               </TableCell>
                             )}
                           </TableRow>
