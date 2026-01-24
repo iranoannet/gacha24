@@ -460,6 +460,7 @@ export type Database = {
           id: string | null
           image_url: string | null
           name: string | null
+          prize_tier: Database["public"]["Enums"]["prize_tier"] | null
           rarity: Database["public"]["Enums"]["card_rarity"] | null
         }
         Insert: {
@@ -469,6 +470,7 @@ export type Database = {
           id?: string | null
           image_url?: string | null
           name?: string | null
+          prize_tier?: Database["public"]["Enums"]["prize_tier"] | null
           rarity?: Database["public"]["Enums"]["card_rarity"] | null
         }
         Update: {
@@ -478,6 +480,7 @@ export type Database = {
           id?: string | null
           image_url?: string | null
           name?: string | null
+          prize_tier?: Database["public"]["Enums"]["prize_tier"] | null
           rarity?: Database["public"]["Enums"]["card_rarity"] | null
         }
         Relationships: [
