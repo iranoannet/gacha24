@@ -53,7 +53,7 @@ export default function CardMaster() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
-  const [deleteProgress, setDeleteProgress] = useState<{ current: number } | null>(null);
+  
 
   // カテゴリ別の件数を取得
   const { data: categoryCounts } = useQuery({
@@ -200,56 +200,26 @@ export default function CardMaster() {
     },
   });
 
-  // カテゴリ一括削除
+  // カテゴリ一括削除（Edge Function使用）
   const bulkDeleteMutation = useMutation({
     mutationFn: async (category: CardCategory) => {
-      const DELETE_BATCH_SIZE = 100;
-      let deletedCount = 0;
-      let hasMore = true;
+      const { data, error } = await supabase.functions.invoke("bulk-delete-cards", {
+        body: { category },
+      });
       
-      while (hasMore) {
-        const { data: toDelete, error: fetchError } = await supabase
-          .from("cards")
-          .select("id")
-          .eq("category", category)
-          .is("gacha_id", null)
-          .limit(DELETE_BATCH_SIZE);
-        
-        if (fetchError) throw fetchError;
-        
-        if (!toDelete || toDelete.length === 0) {
-          hasMore = false;
-          break;
-        }
-        
-        const idsToDelete = toDelete.map(c => c.id);
-        const { error: deleteError } = await supabase
-          .from("cards")
-          .delete()
-          .in("id", idsToDelete);
-        
-        if (deleteError) throw deleteError;
-        
-        deletedCount += toDelete.length;
-        setDeleteProgress({ current: deletedCount });
-        
-        if (toDelete.length < DELETE_BATCH_SIZE) {
-          hasMore = false;
-        }
-      }
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       
-      setDeleteProgress(null);
-      return deletedCount;
+      return data.deletedCount;
     },
     onSuccess: (deletedCount) => {
       queryClient.invalidateQueries({ queryKey: ["master-cards"] });
       queryClient.invalidateQueries({ queryKey: ["card-counts"] });
-      toast.success(`${deletedCount.toLocaleString()}件を削除しました`);
+      toast.success(`${deletedCount?.toLocaleString() || 0}件を削除しました`);
       setIsDeleteOpen(false);
       setDeleteCategory(null);
     },
     onError: (error) => {
-      setDeleteProgress(null);
       toast.error("エラー: " + error.message);
     },
   });
@@ -429,11 +399,6 @@ export default function CardMaster() {
                 {deleteCategory && (
                   <p className="text-sm text-destructive font-medium">
                     ⚠️ {CATEGORY_LABELS[deleteCategory]}の商品マスタ {categoryCounts?.[deleteCategory]?.toLocaleString() || 0}件を全て削除します。この操作は取り消せません。
-                  </p>
-                )}
-                {deleteProgress && (
-                  <p className="text-sm text-muted-foreground">
-                    削除中... {deleteProgress.current.toLocaleString()}件完了
                   </p>
                 )}
                 <Button
