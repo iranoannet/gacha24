@@ -119,6 +119,25 @@ export default function CardMaster() {
     },
   });
 
+  // カテゴリ未設定の商品を一括削除
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("cards")
+        .delete()
+        .is("gacha_id", null)
+        .is("category", null);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["master-cards"] });
+      toast.success("カテゴリ未設定の商品を削除しました");
+    },
+    onError: (error) => {
+      toast.error("エラー: " + error.message);
+    },
+  });
+
   const parseCSVLine = (line: string): string[] => {
     const result: string[] = [];
     let current = '';
@@ -198,8 +217,14 @@ export default function CardMaster() {
   return (
     <AdminLayout title="商品マスタ">
       <div className="space-y-6">
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Dialog open={isCSVOpen} onOpenChange={(open) => { setIsCSVOpen(open); if (!open) setImportCategory(null); }}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Upload className="w-4 h-4" />
+                CSVインポート
+              </Button>
+            </DialogTrigger>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Upload className="w-4 h-4" />
@@ -245,6 +270,21 @@ export default function CardMaster() {
               </div>
             </DialogContent>
           </Dialog>
+          
+          {/* カテゴリ未設定商品の一括削除ボタン */}
+          <Button
+            variant="destructive"
+            className="gap-2"
+            onClick={() => {
+              if (confirm("カテゴリ未設定の商品をすべて削除しますか？\n（ガチャに紐付いていない商品のみ削除されます）")) {
+                bulkDeleteMutation.mutate();
+              }
+            }}
+            disabled={bulkDeleteMutation.isPending}
+          >
+            <Trash2 className="w-4 h-4" />
+            {bulkDeleteMutation.isPending ? "削除中..." : "カテゴリ未設定を一括削除"}
+          </Button>
         </div>
 
         {/* インポート進捗表示 */}
