@@ -119,15 +119,16 @@ Deno.serve(async (req) => {
 
     console.log(`Inserted ${insertedCardIds.length} cards, creating slots...`);
 
-    // Generate random slot numbers
+    // Generate random slot numbers within 1 to count (shuffled)
     const generateRandomSlotNumbers = (count: number): number[] => {
       const numbers: number[] = [];
-      const maxRange = count * 100; // Large range for random numbers
-      while (numbers.length < count) {
-        const randomNum = Math.floor(Math.random() * maxRange) + 1;
-        if (!numbers.includes(randomNum)) {
-          numbers.push(randomNum);
-        }
+      for (let i = 1; i <= count; i++) {
+        numbers.push(i);
+      }
+      // Fisher-Yates shuffle
+      for (let i = numbers.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
       }
       return numbers;
     };
