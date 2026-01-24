@@ -121,7 +121,7 @@ export default function CardMaster() {
       // 1. 同じカテゴリの既存データをバッチ削除（タイムアウト回避）
       toast.info("既存データを削除中...");
       
-      const DELETE_BATCH_SIZE = 1000;
+      const DELETE_BATCH_SIZE = 100; // URLが長くなりすぎないように小さく
       let deletedCount = 0;
       let hasMore = true;
       
