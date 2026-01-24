@@ -58,6 +58,9 @@ export default function SlotEditor() {
   const [lockedSlots, setLockedSlots] = useState<Set<string>>(new Set());
   const [drawMode, setDrawMode] = useState<"random" | "ordered">("random");
   const [slotNumberEdits, setSlotNumberEdits] = useState<Record<string, number>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [goToPage, setGoToPage] = useState("");
+  const itemsPerPage = 100;
   const [newCard, setNewCard] = useState({
     name: "",
     rarity: "C" as CardRarity,
@@ -283,17 +286,25 @@ export default function SlotEditor() {
         [cardPool[i], cardPool[j]] = [cardPool[j], cardPool[i]];
       }
 
-      // Generate random slot numbers (avoiding locked ones)
+      // Generate random slot numbers within 1 to totalSlots (avoiding locked ones)
       const generateRandomSlotNumbers = (count: number, excludeNumbers: Set<number>): number[] => {
         const numbers: number[] = [];
-        const maxRange = totalSlots * 100; // Large range for random numbers
-        while (numbers.length < count) {
-          const randomNum = Math.floor(Math.random() * maxRange) + 1;
-          if (!excludeNumbers.has(randomNum) && !numbers.includes(randomNum)) {
-            numbers.push(randomNum);
+        const availableNumbers: number[] = [];
+        
+        // Create pool of available numbers from 1 to totalSlots
+        for (let i = 1; i <= totalSlots; i++) {
+          if (!excludeNumbers.has(i)) {
+            availableNumbers.push(i);
           }
         }
-        return numbers;
+        
+        // Shuffle and pick required count
+        for (let i = availableNumbers.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [availableNumbers[i], availableNumbers[j]] = [availableNumbers[j], availableNumbers[i]];
+        }
+        
+        return availableNumbers.slice(0, count);
       };
 
       const slotsNeeded = totalSlots - lockedSlotNumbers.size;
@@ -476,7 +487,9 @@ export default function SlotEditor() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortedSlots.slice(0, 100).map((slot) => (
+                        {sortedSlots
+                          .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                          .map((slot) => (
                           <TableRow 
                             key={slot.id}
                             className={drawMode === "ordered" && lockedSlots.has(slot.id) ? "bg-amber-50 dark:bg-amber-950/30" : ""}
@@ -491,6 +504,7 @@ export default function SlotEditor() {
                                   onBlur={() => handleSlotNumberBlur(slot)}
                                   disabled={slot.is_drawn}
                                   min={1}
+                                  max={selectedGacha?.total_slots || undefined}
                                 />
                               </TableCell>
                             )}
@@ -555,10 +569,75 @@ export default function SlotEditor() {
                     </Table>
                   </div>
                 )}
-                {slots && slots.length > 100 && (
-                  <p className="text-sm text-muted-foreground mt-4">
-                    先頭100件を表示中（全{slots.length}件）
-                  </p>
+                {/* Pagination */}
+                {sortedSlots.length > itemsPerPage && (
+                  <div className="flex flex-wrap items-center justify-between gap-4 mt-4 pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">
+                      {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, sortedSlots.length)} / 全{sortedSlots.length}件
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                      >
+                        最初
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        前へ
+                      </Button>
+                      <span className="text-sm px-2">
+                        {currentPage} / {Math.ceil(sortedSlots.length / itemsPerPage)}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(Math.ceil(sortedSlots.length / itemsPerPage), p + 1))}
+                        disabled={currentPage >= Math.ceil(sortedSlots.length / itemsPerPage)}
+                      >
+                        次へ
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(Math.ceil(sortedSlots.length / itemsPerPage))}
+                        disabled={currentPage >= Math.ceil(sortedSlots.length / itemsPerPage)}
+                      >
+                        最後
+                      </Button>
+                      <div className="flex items-center gap-1 ml-2">
+                        <Input
+                          type="number"
+                          className="w-16 h-8 text-center"
+                          placeholder="ページ"
+                          value={goToPage}
+                          onChange={(e) => setGoToPage(e.target.value)}
+                          min={1}
+                          max={Math.ceil(sortedSlots.length / itemsPerPage)}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const page = parseInt(goToPage);
+                            const maxPage = Math.ceil(sortedSlots.length / itemsPerPage);
+                            if (page >= 1 && page <= maxPage) {
+                              setCurrentPage(page);
+                              setGoToPage("");
+                            }
+                          }}
+                        >
+                          移動
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
