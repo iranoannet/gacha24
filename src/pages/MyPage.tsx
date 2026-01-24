@@ -124,7 +124,7 @@ const MyPage = () => {
           
           <MenuItem icon={Ticket} label="クーポン利用" />
           <MenuItem icon={ShoppingBag} label="購入履歴" />
-          <MenuItem icon={MapPin} label="お届け先の登録" />
+          <MenuItem icon={MapPin} label="お届け先の登録" onClick={() => navigate("/mypage/address")} />
           <MenuItem icon={Shield} label="SMS認証" badge="未認証" badgeVariant="warning" />
           <MenuItem icon={User} label="LINE連携" badge="未連携" badgeVariant="warning" />
           <MenuItem icon={Mail} label="メールアドレス変更" />

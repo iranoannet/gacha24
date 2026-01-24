@@ -1,0 +1,13 @@
+-- Add shipping address fields to profiles table
+ALTER TABLE public.profiles
+ADD COLUMN IF NOT EXISTS last_name TEXT,
+ADD COLUMN IF NOT EXISTS first_name TEXT,
+ADD COLUMN IF NOT EXISTS last_name_kana TEXT,
+ADD COLUMN IF NOT EXISTS first_name_kana TEXT,
+ADD COLUMN IF NOT EXISTS postal_code TEXT,
+ADD COLUMN IF NOT EXISTS prefecture TEXT,
+ADD COLUMN IF NOT EXISTS city TEXT,
+ADD COLUMN IF NOT EXISTS address_line1 TEXT,
+ADD COLUMN IF NOT EXISTS address_line2 TEXT,
+ADD COLUMN IF NOT EXISTS phone_number TEXT,
+ADD COLUMN IF NOT EXISTS allow_dm BOOLEAN DEFAULT false;

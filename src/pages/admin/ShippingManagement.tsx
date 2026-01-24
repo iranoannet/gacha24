@@ -69,11 +69,39 @@ export default function ShippingManagement() {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as (InventoryAction & {
+
+      // Fetch user profiles for addresses
+      const userIds = [...new Set((data || []).map(d => d.user_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, display_name, email, last_name, first_name, last_name_kana, first_name_kana, postal_code, prefecture, city, address_line1, address_line2, phone_number")
+        .in("user_id", userIds);
+
+      const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+
+      return (data || []).map(item => ({
+        ...item,
+        profile: profileMap.get(item.user_id) || null,
+      })) as (InventoryAction & {
         cards: Database["public"]["Tables"]["cards"]["Row"] | null;
         gacha_slots: (Database["public"]["Tables"]["gacha_slots"]["Row"] & {
           gacha_masters: Database["public"]["Tables"]["gacha_masters"]["Row"] | null;
         }) | null;
+        profile: {
+          user_id: string;
+          display_name: string | null;
+          email: string | null;
+          last_name: string | null;
+          first_name: string | null;
+          last_name_kana: string | null;
+          first_name_kana: string | null;
+          postal_code: string | null;
+          prefecture: string | null;
+          city: string | null;
+          address_line1: string | null;
+          address_line2: string | null;
+          phone_number: string | null;
+        } | null;
       })[];
     },
   });
@@ -237,39 +265,61 @@ export default function ShippingManagement() {
                     </TableHead>
                     <TableHead>カード</TableHead>
                     <TableHead>ガチャ</TableHead>
-                    <TableHead>ユーザー</TableHead>
+                    <TableHead>配送先情報</TableHead>
                     <TableHead>ステータス</TableHead>
                     <TableHead>追跡番号</TableHead>
                     <TableHead>依頼日時</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRequests?.map((request) => (
-                    <TableRow key={request.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedIds.includes(request.id)}
-                          onCheckedChange={(checked) => handleSelect(request.id, !!checked)}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{request.cards?.name || "-"}</TableCell>
-                      <TableCell>{request.gacha_slots?.gacha_masters?.title || "-"}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {request.user_id.slice(0, 8)}...
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={statusColors[request.status].variant}>
-                          {statusColors[request.status].label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {request.tracking_number || "-"}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(request.requested_at).toLocaleString("ja-JP")}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredRequests?.map((request) => {
+                    const p = request.profile;
+                    const hasAddress = p?.postal_code && p?.prefecture && p?.city && p?.address_line1;
+                    
+                    return (
+                      <TableRow key={request.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.includes(request.id)}
+                            onCheckedChange={(checked) => handleSelect(request.id, !!checked)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{request.cards?.name || "-"}</TableCell>
+                        <TableCell>{request.gacha_slots?.gacha_masters?.title || "-"}</TableCell>
+                        <TableCell className="max-w-[250px]">
+                          {hasAddress ? (
+                            <div className="text-xs space-y-0.5">
+                              <p className="font-medium">
+                                {p?.last_name} {p?.first_name}（{p?.last_name_kana} {p?.first_name_kana}）
+                              </p>
+                              <p className="text-muted-foreground">〒{p?.postal_code}</p>
+                              <p className="text-muted-foreground">
+                                {p?.prefecture}{p?.city}{p?.address_line1}
+                                {p?.address_line2 && ` ${p.address_line2}`}
+                              </p>
+                              <p className="text-muted-foreground">TEL: {p?.phone_number}</p>
+                              {p?.email && <p className="text-muted-foreground">{p.email}</p>}
+                            </div>
+                          ) : (
+                            <Badge variant="destructive" className="text-xs">
+                              住所未登録
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={statusColors[request.status].variant}>
+                            {statusColors[request.status].label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {request.tracking_number || "-"}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {new Date(request.requested_at).toLocaleString("ja-JP")}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
