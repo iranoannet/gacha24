@@ -57,6 +57,8 @@ export default function GachaManagement() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCopyOpen, setIsCopyOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addTargetGacha, setAddTargetGacha] = useState<GachaMaster | null>(null);
   const [createStep, setCreateStep] = useState<"select" | "configure">("select");
   const [selectedGacha, setSelectedGacha] = useState<GachaMaster | null>(null);
   const [selectedItems, setSelectedItems] = useState<SelectedCardItem[]>([]);
@@ -65,6 +67,7 @@ export default function GachaManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<CardCategory | null>(null);
   const [isCopying, setIsCopying] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
@@ -241,6 +244,58 @@ export default function GachaManagement() {
     setCreateStep("select");
     setSearchQuery("");
     setSelectedCategory(null);
+  };
+
+  // 下書きパックに商品を追加
+  const handleOpenAddDialog = (gacha: GachaMaster) => {
+    if (gacha.status !== "draft") {
+      toast.error("下書き状態のパックのみ追加可能です");
+      return;
+    }
+    setAddTargetGacha(gacha);
+    setSelectedCategory((gacha as any).category || null);
+    setSelectedItems([]);
+    setSearchQuery("");
+    setIsAddOpen(true);
+  };
+
+  const handleAddToGacha = async () => {
+    if (!addTargetGacha || selectedItems.length === 0) return;
+    
+    setIsAdding(true);
+    try {
+      // Edge Functionでスロットを追加
+      const response = await supabase.functions.invoke("create-gacha-slots", {
+        body: {
+          gachaId: addTargetGacha.id,
+          items: selectedItems.map((item) => ({
+            cardId: item.card.id,
+            name: item.card.name,
+            imageUrl: item.card.image_url,
+            conversionPoints: item.card.conversion_points,
+            quantity: item.quantity,
+            prizeTier: item.prizeTier,
+            category: (item.card as any).category || null,
+          })),
+          appendMode: true, // 追加モード
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || "スロット追加に失敗しました");
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["admin-gachas"] });
+      queryClient.invalidateQueries({ queryKey: ["available-cards"] });
+      setIsAddOpen(false);
+      setAddTargetGacha(null);
+      setSelectedItems([]);
+      toast.success("商品を追加しました");
+    } catch (error) {
+      toast.error("エラー: " + (error as Error).message);
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   // 過去パックからコピー
@@ -859,6 +914,16 @@ export default function GachaManagement() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          {gacha.status === "draft" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenAddDialog(gacha)}
+                              title="商品を追加"
+                            >
+                              <Plus className="w-4 h-4 text-primary" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -975,6 +1040,151 @@ export default function GachaManagement() {
                 disabled={updateMutation.isPending}
               >
                 {updateMutation.isPending ? "更新中..." : "更新"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* 商品追加ダイアログ（下書きパック用） */}
+        <Dialog open={isAddOpen} onOpenChange={(open) => { 
+          setIsAddOpen(open); 
+          if (!open) {
+            setAddTargetGacha(null);
+            setSelectedItems([]);
+            setSearchQuery("");
+          }
+        }}>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                商品追加: {addTargetGacha?.title}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6">
+              <p className="text-sm text-muted-foreground">
+                カテゴリ: {addTargetGacha?.category ? CATEGORY_LABELS[addTargetGacha.category as CardCategory] : "未設定"} 
+                （現在: {addTargetGacha?.total_slots}口）
+              </p>
+
+              {/* 商品検索・選択 */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* 左: 商品マスタ */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Search className="w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="商品名で検索..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="flex-1"
+                    />
+                  </div>
+                  <div className="border rounded-lg h-[300px] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>商品名</TableHead>
+                          <TableHead className="w-20">ポイント</TableHead>
+                          <TableHead className="w-16">追加</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredCards.filter(c => 
+                          !selectedCategory || (c as any).category === selectedCategory
+                        ).map((card) => (
+                          <TableRow key={card.id}>
+                            <TableCell className="font-medium text-sm truncate max-w-[180px]" title={card.name}>
+                              {card.name}
+                            </TableCell>
+                            <TableCell className="text-xs">{card.conversion_points}pt</TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => addCardToSelection(card)}
+                                disabled={selectedItems.some(item => item.card.id === card.id)}
+                              >
+                                <Plus className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {/* 右: 選択済み */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">選択済み商品</span>
+                    <Badge variant="secondary">追加: {getTotalSlots()}口</Badge>
+                  </div>
+                  <div className="border rounded-lg h-[300px] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>商品名</TableHead>
+                          <TableHead className="w-20">枚数</TableHead>
+                          <TableHead className="w-24">賞</TableHead>
+                          <TableHead className="w-12">削除</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedItems.map((item) => (
+                          <TableRow key={item.card.id}>
+                            <TableCell className="font-medium text-sm truncate max-w-[140px]" title={item.card.name}>
+                              {item.card.name}
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={9999}
+                                value={item.quantity}
+                                onChange={(e) => updateItemQuantity(item.card.id, parseInt(e.target.value) || 1)}
+                                className="w-16 h-8 text-sm"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={item.prizeTier}
+                                onValueChange={(value: PrizeTier) => updateItemPrizeTier(item.card.id, value)}
+                              >
+                                <SelectTrigger className="w-20 h-8">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="S">S賞</SelectItem>
+                                  <SelectItem value="A">A賞</SelectItem>
+                                  <SelectItem value="B">B賞</SelectItem>
+                                  <SelectItem value="miss">ハズレ</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => removeCardFromSelection(item.card.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={handleAddToGacha}
+                disabled={isAdding || selectedItems.length === 0}
+              >
+                {isAdding ? "追加中..." : `${getTotalSlots()}口を追加`}
               </Button>
             </div>
           </DialogContent>
