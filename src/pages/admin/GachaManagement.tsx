@@ -127,50 +127,40 @@ export default function GachaManagement() {
       // 総口数を計算
       const totalSlots = data.items.reduce((sum, item) => sum + item.quantity, 0);
 
-      // 1. ガチャを作成
+      // 1. ガチャを作成（スロットは後でEdge Functionで一括生成）
       const { data: gacha, error: gachaError } = await supabase
         .from("gacha_masters")
         .insert({
           ...data.formData,
           banner_url: bannerUrl || null,
-          total_slots: totalSlots,
-          remaining_slots: totalSlots,
+          total_slots: 0,
+          remaining_slots: 0,
         })
         .select()
         .single();
       if (gachaError) throw gachaError;
 
-      // 2. カードを複製してガチャに紐付け、スロットを生成
-      let slotNumber = 1;
-      const cardIdsToUpdate: string[] = [];
+      // 2. Edge Functionでスロットを一括生成（高速化）
+      const { data: session } = await supabase.auth.getSession();
+      const response = await supabase.functions.invoke("create-gacha-slots", {
+        body: {
+          gachaId: gacha.id,
+          items: data.items.map((item) => ({
+            cardId: item.card.id,
+            name: item.card.name,
+            imageUrl: item.card.image_url,
+            conversionPoints: item.card.conversion_points,
+            quantity: item.quantity,
+            prizeTier: item.prizeTier,
+            category: (item.card as any).category || null,
+          })),
+        },
+      });
 
-      for (const item of data.items) {
-        // 同じカードを複数枚追加する場合、各枚数分のスロットを作成
-        for (let i = 0; i < item.quantity; i++) {
-          // 新しいカードレコードを作成（元のカードは商品マスタに残す）
-          const { data: newCard, error: cardError } = await supabase
-            .from("cards")
-            .insert({
-              name: item.card.name,
-              image_url: item.card.image_url,
-              conversion_points: item.card.conversion_points,
-              gacha_id: gacha.id,
-              prize_tier: item.prizeTier,
-            })
-            .select()
-            .single();
-          if (cardError) throw cardError;
-
-          // スロットを生成
-          const { error: slotError } = await supabase
-            .from("gacha_slots")
-            .insert({
-              gacha_id: gacha.id,
-              card_id: newCard.id,
-              slot_number: slotNumber++,
-            });
-          if (slotError) throw slotError;
-        }
+      if (response.error) {
+        // ガチャを削除（ロールバック）
+        await supabase.from("gacha_masters").delete().eq("id", gacha.id);
+        throw new Error(response.error.message || "スロット作成に失敗しました");
       }
 
       return gacha;
