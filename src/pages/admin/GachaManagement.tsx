@@ -144,29 +144,26 @@ export default function GachaManagement() {
     const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
 
     const cards: Array<{
+      id: string;
       name: string;
-      rarity: Database["public"]["Enums"]["card_rarity"];
       image_url: string;
       conversion_points: number;
-      quantity: number;
     }> = [];
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(",").map((v) => v.trim());
-      const card: Record<string, string | number> = {};
+      const card: Record<string, string> = {};
       headers.forEach((header, index) => {
         card[header] = values[index];
       });
 
-      const rarity = (card.rarity as string)?.toUpperCase();
-      if (!["S", "A", "B", "C", "D"].includes(rarity)) continue;
+      if (!card.id || !card.name) continue;
 
       cards.push({
-        name: card.name as string || card.card_name as string || "Unknown",
-        rarity: rarity as Database["public"]["Enums"]["card_rarity"],
-        image_url: card.image_url as string || "",
-        conversion_points: parseInt(card.points as string) || parseInt(card.conversion_points as string) || 0,
-        quantity: parseInt(card.quantity as string) || parseInt(card.total_quantity as string) || 1,
+        id: card.id,
+        name: card.name,
+        image_url: card.image_url || "",
+        conversion_points: parseInt(card.points) || 0,
       });
     }
 
@@ -177,7 +174,6 @@ export default function GachaManagement() {
 
     toast.success(`${cards.length}種類のカードを読み込みました。ガチャを選択してスロットを生成してください。`);
     setIsCSVOpen(false);
-    // Store cards temporarily for slot generation
     localStorage.setItem("imported_cards", JSON.stringify(cards));
   };
 
@@ -289,7 +285,7 @@ export default function GachaManagement() {
                 <p className="text-sm text-muted-foreground">
                   CSVファイルには以下の列が必要です：
                   <br />
-                  <code>name, rarity (S/A/B/C/D), image_url, points, quantity</code>
+                  <code>id, name, image_url, points</code>
                 </p>
                 <Input
                   type="file"
