@@ -1,11 +1,32 @@
-import { Bell, Plus, LogIn, UserPlus } from "lucide-react";
+import { Bell, Plus, LogIn, UserPlus, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const Header = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+
+  // ユーザーのプロファイル（ポイント残高）を取得
+  const { data: profile } = useQuery({
+    queryKey: ["user-profile-header", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("points_balance")
+        .eq("user_id", user.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+    refetchInterval: 5000, // 5秒ごとに更新
+  });
+
+  const pointsBalance = profile?.points_balance ?? 0;
 
   return (
     <header className="sticky top-0 z-40 bg-card border-b border-border">
@@ -24,7 +45,7 @@ const Header = () => {
               {/* Points Display */}
               <div className="points-badge">
                 <span className="text-xs">JP¥</span>
-                <span className="font-bold">0</span>
+                <span className="font-bold">{pointsBalance.toLocaleString()}</span>
               </div>
 
               {/* Add Points Button */}

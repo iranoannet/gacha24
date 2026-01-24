@@ -1,8 +1,12 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Package, Coins, Sparkles } from "lucide-react";
+import { X, Package, Coins, Sparkles, Truck, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface DrawnCard {
   slotId: string;
@@ -52,14 +56,26 @@ const prizeTierStyles: Record<string, { bg: string; text: string; glow: string; 
   },
 };
 
+type ActionType = "shipping" | "conversion" | null;
+
 export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBalance }: GachaResultModalProps) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [revealedCount, setRevealedCount] = useState(0);
   const [showAll, setShowAll] = useState(false);
+  const [step, setStep] = useState<"reveal" | "select">("reveal");
+  const [selections, setSelections] = useState<Map<string, ActionType>>(new Map());
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // ハズレ以外のカード
+  const actionableCards = drawnCards.filter(card => card.prizeTier !== "miss");
 
   useEffect(() => {
     if (isOpen && drawnCards.length > 0) {
       setRevealedCount(0);
       setShowAll(false);
+      setStep("reveal");
+      setSelections(new Map());
       
       // 1枚ずつ表示するアニメーション
       const interval = setInterval(() => {
@@ -81,6 +97,145 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
     setShowAll(true);
   };
 
+  const handleProceedToSelect = () => {
+    if (actionableCards.length === 0) {
+      // ハズレのみの場合は直接閉じる
+      onClose();
+    } else {
+      setStep("select");
+    }
+  };
+
+  const updateSelection = (slotId: string, action: ActionType) => {
+    setSelections(prev => {
+      const next = new Map(prev);
+      if (prev.get(slotId) === action) {
+        next.delete(slotId);
+      } else {
+        next.set(slotId, action);
+      }
+      return next;
+    });
+  };
+
+  const selectAllForAction = (action: ActionType) => {
+    const newSelections = new Map<string, ActionType>();
+    actionableCards.forEach(card => {
+      newSelections.set(card.slotId, action);
+    });
+    setSelections(newSelections);
+  };
+
+  const processActionsMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("ログインが必要です");
+
+      const shippingItems: { slotId: string; cardId: string }[] = [];
+      const conversionItems: { slotId: string; cardId: string; points: number }[] = [];
+      let totalConversionPoints = 0;
+
+      selections.forEach((action, slotId) => {
+        const card = actionableCards.find(c => c.slotId === slotId);
+        if (!card) return;
+        
+        if (action === "shipping") {
+          shippingItems.push({ slotId, cardId: card.cardId });
+        } else if (action === "conversion") {
+          conversionItems.push({ slotId, cardId: card.cardId, points: card.conversionPoints });
+          totalConversionPoints += card.conversionPoints;
+        }
+      });
+
+      // 発送依頼を登録
+      if (shippingItems.length > 0) {
+        const { error: shippingError } = await supabase
+          .from("inventory_actions")
+          .insert(
+            shippingItems.map(item => ({
+              user_id: user.id,
+              slot_id: item.slotId,
+              card_id: item.cardId,
+              action_type: "shipping" as const,
+              status: "pending" as const,
+            }))
+          );
+        if (shippingError) throw shippingError;
+      }
+
+      // ポイント変換を登録
+      if (conversionItems.length > 0) {
+        const { error: conversionError } = await supabase
+          .from("inventory_actions")
+          .insert(
+            conversionItems.map(item => ({
+              user_id: user.id,
+              slot_id: item.slotId,
+              card_id: item.cardId,
+              action_type: "conversion" as const,
+              status: "completed" as const,
+              converted_points: item.points,
+              processed_at: new Date().toISOString(),
+            }))
+          );
+        if (conversionError) throw conversionError;
+
+        // ポイントを追加
+        const { data: profile, error: fetchError } = await supabase
+          .from("profiles")
+          .select("points_balance")
+          .eq("user_id", user.id)
+          .single();
+        
+        if (fetchError) throw fetchError;
+
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ points_balance: (profile?.points_balance || 0) + totalConversionPoints })
+          .eq("user_id", user.id);
+        
+        if (updateError) throw updateError;
+      }
+
+      return { shippingCount: shippingItems.length, conversionCount: conversionItems.length, totalConversionPoints };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["user-profile-header"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-unselected"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-pending"] });
+      
+      const messages: string[] = [];
+      if (result.shippingCount > 0) {
+        messages.push(`${result.shippingCount}件の発送依頼を受付`);
+      }
+      if (result.conversionCount > 0) {
+        messages.push(`${result.totalConversionPoints.toLocaleString()}pt獲得`);
+      }
+      if (messages.length > 0) {
+        toast.success(messages.join("、"));
+      }
+      onClose();
+    },
+    onError: (error) => {
+      toast.error("エラーが発生しました: " + error.message);
+    },
+  });
+
+  const handleSubmit = async () => {
+    if (selections.size === 0) {
+      toast.info("アイテムを選択してください");
+      return;
+    }
+    setIsProcessing(true);
+    await processActionsMutation.mutateAsync();
+    setIsProcessing(false);
+  };
+
+  const handleSkipSelection = () => {
+    // 選択せずに閉じる（後でインベントリから選択可能）
+    onClose();
+  };
+
   // 賞別にグループ化
   const groupedCards = drawnCards.reduce((acc, card) => {
     const tier = card.prizeTier;
@@ -91,6 +246,25 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
 
   const tierOrder = ["S", "A", "B", "miss"];
 
+  // 選択サマリー
+  const summary = {
+    shipping: 0,
+    conversion: 0,
+    conversionPoints: 0,
+  };
+
+  selections.forEach((action, slotId) => {
+    if (action === "shipping") {
+      summary.shipping++;
+    } else if (action === "conversion") {
+      const card = actionableCards.find(c => c.slotId === slotId);
+      if (card) {
+        summary.conversion++;
+        summary.conversionPoints += card.conversionPoints;
+      }
+    }
+  });
+
   if (!isOpen) return null;
 
   return (
@@ -100,7 +274,7 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
-        onClick={(e) => e.target === e.currentTarget && revealedCount >= drawnCards.length && onClose()}
+        onClick={(e) => e.target === e.currentTarget && revealedCount >= drawnCards.length && step === "reveal" && actionableCards.length === 0 && onClose()}
       >
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
@@ -112,125 +286,211 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
           <div className="relative p-4 border-b border-border">
             <div className="flex items-center justify-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-bold text-foreground">ガチャ結果</h2>
+              <h2 className="text-lg font-bold text-foreground">
+                {step === "reveal" ? "ガチャ結果" : "アイテムを選択"}
+              </h2>
               <Sparkles className="h-5 w-5 text-primary" />
             </div>
-            {revealedCount >= drawnCards.length && (
-              <button
-                onClick={onClose}
-                className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            )}
           </div>
 
-          {/* Cards Display */}
+          {/* Content */}
           <div className="flex-1 overflow-y-auto p-4">
-            {revealedCount < drawnCards.length ? (
-              // 演出中：1枚ずつ表示
-              <div className="flex flex-col items-center justify-center min-h-[300px]">
-                {drawnCards.slice(0, revealedCount + 1).map((card, index) => (
-                  <motion.div
-                    key={card.slotId}
-                    initial={{ scale: 0, rotateY: 180 }}
-                    animate={{ scale: index === revealedCount ? 1 : 0.6, rotateY: 0 }}
-                    transition={{ type: "spring", duration: 0.5 }}
-                    className={`relative ${index === revealedCount ? "" : "hidden"}`}
-                  >
-                    <div className={`relative w-48 aspect-[3/4] rounded-xl overflow-hidden ${prizeTierStyles[card.prizeTier]?.glow}`}>
-                      {/* Prize Tier Badge */}
-                      <Badge
-                        className={`absolute top-2 left-2 z-10 ${prizeTierStyles[card.prizeTier]?.bg} ${prizeTierStyles[card.prizeTier]?.text} font-black text-sm px-3 py-1`}
+            {step === "reveal" ? (
+              // 結果表示ステップ
+              <>
+                {revealedCount < drawnCards.length ? (
+                  // 演出中：1枚ずつ表示
+                  <div className="flex flex-col items-center justify-center min-h-[300px]">
+                    {drawnCards.slice(0, revealedCount + 1).map((card, index) => (
+                      <motion.div
+                        key={card.slotId}
+                        initial={{ scale: 0, rotateY: 180 }}
+                        animate={{ scale: index === revealedCount ? 1 : 0.6, rotateY: 0 }}
+                        transition={{ type: "spring", duration: 0.5 }}
+                        className={`relative ${index === revealedCount ? "" : "hidden"}`}
                       >
-                        {prizeTierStyles[card.prizeTier]?.label}
-                      </Badge>
-
-                      {card.imageUrl ? (
-                        <img
-                          src={card.imageUrl}
-                          alt={card.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className={`w-full h-full bg-gradient-to-br ${prizeTierStyles[card.prizeTier]?.color} flex items-center justify-center`}>
-                          <Package className="h-16 w-16 text-white/50" />
-                        </div>
-                      )}
-
-                      {/* Card Name Overlay */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                        <p className="text-white text-sm font-bold line-clamp-2">{card.name}</p>
-                        <p className="text-white/70 text-xs flex items-center gap-1">
-                          <Coins className="h-3 w-3" />
-                          {card.conversionPoints.toLocaleString()}pt
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="text-center text-muted-foreground text-sm mt-3">
-                      {revealedCount + 1} / {drawnCards.length}
-                    </p>
-                  </motion.div>
-                ))}
-
-                <Button
-                  variant="ghost"
-                  onClick={handleSkip}
-                  className="mt-4 text-muted-foreground"
-                >
-                  スキップ →
-                </Button>
-              </div>
-            ) : (
-              // 結果一覧表示
-              <div className="space-y-4">
-                {tierOrder.map((tier) => {
-                  const cards = groupedCards[tier];
-                  if (!cards || cards.length === 0) return null;
-
-                  return (
-                    <div key={tier}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className={`${prizeTierStyles[tier]?.bg} ${prizeTierStyles[tier]?.text} font-bold`}>
-                          {prizeTierStyles[tier]?.label}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">×{cards.length}</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {cards.map((card) => (
-                          <motion.div
-                            key={card.slotId}
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className={`relative rounded-lg overflow-hidden aspect-[3/4] ${prizeTierStyles[card.prizeTier]?.glow}`}
+                        <div className={`relative w-48 aspect-[3/4] rounded-xl overflow-hidden ${prizeTierStyles[card.prizeTier]?.glow}`}>
+                          <Badge
+                            className={`absolute top-2 left-2 z-10 ${prizeTierStyles[card.prizeTier]?.bg} ${prizeTierStyles[card.prizeTier]?.text} font-black text-sm px-3 py-1`}
                           >
-                            {card.imageUrl ? (
-                              <img
-                                src={card.imageUrl}
-                                alt={card.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className={`w-full h-full bg-gradient-to-br ${prizeTierStyles[card.prizeTier]?.color} flex items-center justify-center`}>
-                                <Package className="h-8 w-8 text-white/50" />
-                              </div>
-                            )}
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-1">
-                              <p className="text-white text-[10px] line-clamp-1">{card.name}</p>
+                            {prizeTierStyles[card.prizeTier]?.label}
+                          </Badge>
+
+                          {card.imageUrl ? (
+                            <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className={`w-full h-full bg-gradient-to-br ${prizeTierStyles[card.prizeTier]?.color} flex items-center justify-center`}>
+                              <Package className="h-16 w-16 text-white/50" />
                             </div>
-                          </motion.div>
-                        ))}
+                          )}
+
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                            <p className="text-white text-sm font-bold line-clamp-2">{card.name}</p>
+                            <p className="text-white/70 text-xs flex items-center gap-1">
+                              <Coins className="h-3 w-3" />
+                              {card.conversionPoints.toLocaleString()}pt
+                            </p>
+                          </div>
+                        </div>
+
+                        <p className="text-center text-muted-foreground text-sm mt-3">
+                          {revealedCount + 1} / {drawnCards.length}
+                        </p>
+                      </motion.div>
+                    ))}
+
+                    <Button variant="ghost" onClick={handleSkip} className="mt-4 text-muted-foreground">
+                      スキップ →
+                    </Button>
+                  </div>
+                ) : (
+                  // 結果一覧表示
+                  <div className="space-y-4">
+                    {tierOrder.map((tier) => {
+                      const cards = groupedCards[tier];
+                      if (!cards || cards.length === 0) return null;
+
+                      return (
+                        <div key={tier}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge className={`${prizeTierStyles[tier]?.bg} ${prizeTierStyles[tier]?.text} font-bold`}>
+                              {prizeTierStyles[tier]?.label}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">×{cards.length}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {cards.map((card) => (
+                              <motion.div
+                                key={card.slotId}
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className={`relative rounded-lg overflow-hidden aspect-[3/4] ${prizeTierStyles[card.prizeTier]?.glow}`}
+                              >
+                                {card.imageUrl ? (
+                                  <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className={`w-full h-full bg-gradient-to-br ${prizeTierStyles[card.prizeTier]?.color} flex items-center justify-center`}>
+                                    <Package className="h-8 w-8 text-white/50" />
+                                  </div>
+                                )}
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-1">
+                                  <p className="text-white text-[10px] line-clamp-1">{card.name}</p>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              // 選択ステップ
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground text-center">
+                  発送またはポイント変換を選択してください
+                </p>
+
+                {/* 一括選択ボタン */}
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => selectAllForAction("shipping")} className="flex-1">
+                    <Truck className="h-4 w-4 mr-1" />
+                    すべて発送
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => selectAllForAction("conversion")} className="flex-1">
+                    <Coins className="h-4 w-4 mr-1" />
+                    すべて変換
+                  </Button>
+                </div>
+
+                {/* アイテムリスト */}
+                <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                  {actionableCards.map((card) => {
+                    const currentAction = selections.get(card.slotId);
+                    return (
+                      <motion.div
+                        key={card.slotId}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
+                      >
+                        <div className="w-10 h-14 rounded overflow-hidden flex-shrink-0">
+                          {card.imageUrl ? (
+                            <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className={`w-full h-full bg-gradient-to-br ${prizeTierStyles[card.prizeTier]?.color} flex items-center justify-center`}>
+                              <Package className="h-3 w-3 text-white/70" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <Badge className={`${prizeTierStyles[card.prizeTier]?.bg} text-white text-[10px] px-1.5 py-0 mb-1`}>
+                            {prizeTierStyles[card.prizeTier]?.label}
+                          </Badge>
+                          <p className="text-sm font-medium truncate">{card.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            変換: {card.conversionPoints.toLocaleString()}pt
+                          </p>
+                        </div>
+
+                        <div className="flex gap-1">
+                          <Button
+                            variant={currentAction === "shipping" ? "default" : "outline"}
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => updateSelection(card.slotId, "shipping")}
+                          >
+                            <Truck className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant={currentAction === "conversion" ? "default" : "outline"}
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => updateSelection(card.slotId, "conversion")}
+                          >
+                            <Coins className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {/* サマリー */}
+                {selections.size > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="bg-primary/10 rounded-lg p-3 space-y-1"
+                  >
+                    {summary.shipping > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-1">
+                          <Truck className="h-4 w-4" />
+                          発送依頼
+                        </span>
+                        <span className="font-bold">{summary.shipping}件</span>
                       </div>
-                    </div>
-                  );
-                })}
+                    )}
+                    {summary.conversion > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-1">
+                          <Coins className="h-4 w-4" />
+                          ポイント変換
+                        </span>
+                        <span className="font-bold text-primary">+{summary.conversionPoints.toLocaleString()}pt</span>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
               </div>
             )}
           </div>
 
           {/* Footer */}
-          {revealedCount >= drawnCards.length && (
+          {step === "reveal" && revealedCount >= drawnCards.length && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -244,8 +504,38 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
                 <span className="text-muted-foreground">残高</span>
                 <span className="font-bold text-primary">{newBalance.toLocaleString()}pt</span>
               </div>
-              <Button onClick={onClose} className="w-full btn-gacha">
-                閉じる
+              {actionableCards.length > 0 ? (
+                <Button onClick={handleProceedToSelect} className="w-full btn-gacha">
+                  アイテムを選択する
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              ) : (
+                <Button onClick={onClose} className="w-full btn-gacha">
+                  閉じる
+                </Button>
+              )}
+            </motion.div>
+          )}
+
+          {step === "select" && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 border-t border-border bg-muted/30 space-y-2"
+            >
+              <Button
+                className="w-full btn-gacha"
+                onClick={handleSubmit}
+                disabled={isProcessing || selections.size === 0}
+              >
+                {isProcessing ? "処理中..." : "選択を確定"}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={handleSkipSelection}
+              >
+                後で選択する
               </Button>
             </motion.div>
           )}
