@@ -103,10 +103,9 @@ const Inventory = () => {
 
       const actionSlotIds = new Set(actions?.map(a => a.slot_id) || []);
 
-      // 未選択のアイテムをフィルタリング（ハズレを除外）
+      // 未選択のアイテムをフィルタリング（ハズレも含む - ポイント変換可能）
       const unselected = (slots || [])
         .filter(slot => !actionSlotIds.has(slot.id))
-        .filter(slot => (slot.cards as any)?.prize_tier !== "miss")
         .map(slot => ({
           id: slot.id,
           slotId: slot.id,
@@ -324,16 +323,19 @@ const Inventory = () => {
       {/* アクションボタン */}
       {showActions && (
         <div className="flex flex-col gap-1">
-          <Button
-            size="sm"
-            variant="default"
-            className="h-8 text-xs"
-            onClick={() => handleRequestShipping(item)}
-            disabled={requestShippingMutation.isPending}
-          >
-            <Truck className="h-3 w-3 mr-1" />
-            発送
-          </Button>
+          {/* ハズレ以外は発送可能 */}
+          {item.prizeTier !== "miss" && (
+            <Button
+              size="sm"
+              variant="default"
+              className="h-8 text-xs"
+              onClick={() => handleRequestShipping(item)}
+              disabled={requestShippingMutation.isPending}
+            >
+              <Truck className="h-3 w-3 mr-1" />
+              発送
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
