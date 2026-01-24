@@ -94,6 +94,16 @@ const PrizeCard = ({ card, compact = false }: { card: GroupedCard; compact?: boo
           </span>
         </div>
       )}
+      
+      {/* 商品名 */}
+      <div className="p-2 bg-card/90 backdrop-blur-sm">
+        <p className={`font-medium text-foreground line-clamp-2 ${compact ? "text-[10px]" : "text-xs"}`}>
+          {card.name}
+        </p>
+        <p className={`text-muted-foreground ${compact ? "text-[8px]" : "text-[10px]"}`}>
+          {card.conversionPoints}pt
+        </p>
+      </div>
     </motion.div>
   );
 };
