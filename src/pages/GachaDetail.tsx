@@ -57,6 +57,47 @@ interface GachaResult {
   newBalance: number;
 }
 
+// カードコンポーネント
+const PrizeCard = ({ card, compact = false }: { card: GroupedCard; compact?: boolean }) => {
+  const style = prizeTierStyles[card.prizeTier];
+  
+  return (
+    <motion.div
+      variants={{
+        hidden: { opacity: 0, scale: 0.9 },
+        visible: { opacity: 1, scale: 1 },
+      }}
+      className={`relative rounded-lg overflow-hidden bg-card border border-border ${style?.glow || ""}`}
+    >
+      {/* 賞バッジ */}
+      <Badge
+        className={`absolute top-1 left-1 z-10 ${style?.bg} ${style?.text} font-black ${compact ? "text-[10px] px-1.5" : "text-xs px-2"}`}
+      >
+        {style?.label}
+      </Badge>
+      
+      {/* 数量バッジ */}
+      <div className={`absolute bottom-1 right-1 z-10 bg-foreground/80 text-background font-bold rounded ${compact ? "text-[10px] px-1" : "text-xs px-2 py-0.5"}`}>
+        ×{card.quantity}
+      </div>
+      
+      {card.imageUrl ? (
+        <img
+          src={card.imageUrl}
+          alt={card.name}
+          className="w-full aspect-[3/4] object-cover"
+        />
+      ) : (
+        <div className="w-full aspect-[3/4] bg-muted flex items-center justify-center p-1">
+          <span className={`text-muted-foreground text-center line-clamp-3 ${compact ? "text-[8px]" : "text-xs"}`}>
+            {card.name}
+          </span>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
 const GachaDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -331,57 +372,120 @@ const GachaDetail = () => {
 
           {/* Card Lineup Section */}
           <section className="mb-6">
-            <h2 className="text-lg font-bold mb-4 text-center text-foreground">
+            <h2 className="text-lg font-bold mb-6 text-center text-foreground">
               カードラインナップ
             </h2>
             
             {groupedCards.length === 0 ? (
               <p className="text-center text-muted-foreground">カードが登録されていません</p>
             ) : (
-              <motion.div
-                className="grid grid-cols-2 gap-3"
-                initial="hidden"
-                animate="visible"
-                variants={{
-                  hidden: {},
-                  visible: {
-                    transition: { staggerChildren: 0.05 },
-                  },
-                }}
-              >
-                {groupedCards.map((card) => (
-                  <motion.div
-                    key={card.id}
-                    variants={{
-                      hidden: { opacity: 0, scale: 0.9 },
-                      visible: { opacity: 1, scale: 1 },
-                    }}
-                    className={`relative rounded-lg overflow-hidden bg-card border border-border ${prizeTierStyles[card.prizeTier]?.glow || ""}`}
-                  >
-                    <Badge
-                      className={`absolute top-2 left-2 z-10 ${prizeTierStyles[card.prizeTier]?.bg} ${prizeTierStyles[card.prizeTier]?.text} font-black text-xs px-2`}
-                    >
-                      {prizeTierStyles[card.prizeTier]?.label}
-                    </Badge>
-                    
-                    <div className="absolute bottom-2 right-2 z-10 bg-foreground/80 text-background text-xs font-bold px-2 py-0.5 rounded">
-                      ×{card.quantity}
-                    </div>
-                    
-                    {card.imageUrl ? (
-                      <img
-                        src={card.imageUrl}
-                        alt={card.name}
-                        className="w-full aspect-[3/4] object-cover"
-                      />
-                    ) : (
-                      <div className="w-full aspect-[3/4] bg-muted flex items-center justify-center p-2">
-                        <span className="text-xs text-muted-foreground text-center line-clamp-3">{card.name}</span>
+              <div className="space-y-8">
+                {/* S賞セクション */}
+                {groupedCards.filter(c => c.prizeTier === "S").length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="relative">
+                        <span 
+                          className="text-4xl font-black tracking-wider"
+                          style={{
+                            background: "linear-gradient(180deg, #ff6b6b 0%, #ff0000 30%, #ff4d4d 50%, #ff0000 70%, #cc0000 100%)",
+                            WebkitBackgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                            textShadow: "none",
+                            filter: "drop-shadow(0 2px 4px rgba(255,0,0,0.3))",
+                          }}
+                        >
+                          S賞
+                        </span>
+                        <div className="absolute -top-2 -left-4 text-yellow-400 text-xl">✦</div>
+                        <div className="absolute -top-1 -right-4 text-yellow-400 text-lg">✦</div>
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-yellow-400 text-sm">✦</div>
                       </div>
-                    )}
-                  </motion.div>
-                ))}
-              </motion.div>
+                    </div>
+                    <motion.div
+                      className="grid grid-cols-2 gap-3"
+                      initial="hidden"
+                      animate="visible"
+                      variants={{
+                        hidden: {},
+                        visible: { transition: { staggerChildren: 0.05 } },
+                      }}
+                    >
+                      {groupedCards.filter(c => c.prizeTier === "S").map((card) => (
+                        <PrizeCard key={card.id} card={card} />
+                      ))}
+                    </motion.div>
+                  </div>
+                )}
+
+                {/* A賞セクション */}
+                {groupedCards.filter(c => c.prizeTier === "A").length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="relative">
+                        <span 
+                          className="text-4xl font-black tracking-wider"
+                          style={{
+                            background: "linear-gradient(180deg, #ffd700 0%, #ffb300 30%, #ffc107 50%, #ff9800 70%, #e65100 100%)",
+                            WebkitBackgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                            filter: "drop-shadow(0 2px 4px rgba(255,183,0,0.3))",
+                          }}
+                        >
+                          A賞
+                        </span>
+                        <div className="absolute -top-1 -left-3 text-amber-400 text-lg">✦</div>
+                        <div className="absolute -top-0 -right-3 text-amber-400 text-base">✦</div>
+                      </div>
+                    </div>
+                    <motion.div
+                      className="grid grid-cols-3 gap-2"
+                      initial="hidden"
+                      animate="visible"
+                      variants={{
+                        hidden: {},
+                        visible: { transition: { staggerChildren: 0.03 } },
+                      }}
+                    >
+                      {groupedCards.filter(c => c.prizeTier === "A").map((card) => (
+                        <PrizeCard key={card.id} card={card} compact />
+                      ))}
+                    </motion.div>
+                  </div>
+                )}
+
+                {/* B賞セクション */}
+                {groupedCards.filter(c => c.prizeTier === "B").length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-center mb-4">
+                      <span 
+                        className="text-3xl font-black tracking-wider"
+                        style={{
+                          background: "linear-gradient(180deg, #90caf9 0%, #42a5f5 30%, #2196f3 50%, #1976d2 70%, #0d47a1 100%)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          filter: "drop-shadow(0 2px 4px rgba(33,150,243,0.3))",
+                        }}
+                      >
+                        B賞
+                      </span>
+                    </div>
+                    <motion.div
+                      className="grid grid-cols-4 gap-2"
+                      initial="hidden"
+                      animate="visible"
+                      variants={{
+                        hidden: {},
+                        visible: { transition: { staggerChildren: 0.02 } },
+                      }}
+                    >
+                      {groupedCards.filter(c => c.prizeTier === "B").map((card) => (
+                        <PrizeCard key={card.id} card={card} compact />
+                      ))}
+                    </motion.div>
+                  </div>
+                )}
+              </div>
             )}
           </section>
 
