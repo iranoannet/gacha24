@@ -86,7 +86,6 @@ const Inventory = () => {
           id,
           card_id,
           gacha_id,
-          cards!inner(id, name, image_url, prize_tier, conversion_points),
           gacha_masters!inner(title)
         `)
         .eq("user_id", user.id)
@@ -104,24 +103,41 @@ const Inventory = () => {
 
       const actionSlotIds = new Set(actions?.map(a => a.slot_id) || []);
 
-      // 未選択のアイテムをフィルタリング（ハズレも含む - ポイント変換可能）
-      const unselected = (slots || [])
-        .filter(slot => !actionSlotIds.has(slot.id))
-        .map(slot => ({
+      // 未選択のスロットをフィルタリング
+      const unselectedSlots = (slots || []).filter(slot => !actionSlotIds.has(slot.id));
+      
+      if (unselectedSlots.length === 0) return [];
+
+      // カード情報をcards_publicビューから取得
+      const cardIds = [...new Set(unselectedSlots.map(s => s.card_id).filter(Boolean))];
+      const { data: cardsData, error: cardsError } = await supabase
+        .from("cards_public")
+        .select("id, name, image_url, prize_tier, conversion_points")
+        .in("id", cardIds);
+
+      if (cardsError) throw cardsError;
+
+      const cardsMap = new Map(cardsData?.map(c => [c.id, c]) || []);
+
+      // 未選択のアイテムをマッピング
+      const unselected = unselectedSlots.map(slot => {
+        const card = cardsMap.get(slot.card_id);
+        return {
           id: slot.id,
           slotId: slot.id,
-          cardId: (slot.cards as any)?.id,
-          cardName: (slot.cards as any)?.name || "不明",
-          cardImageUrl: (slot.cards as any)?.image_url,
-          prizeTier: (slot.cards as any)?.prize_tier || "miss",
-          conversionPoints: (slot.cards as any)?.conversion_points || 0,
+          cardId: card?.id || slot.card_id || "",
+          cardName: card?.name || "不明",
+          cardImageUrl: card?.image_url || null,
+          prizeTier: card?.prize_tier || "miss",
+          conversionPoints: card?.conversion_points || 0,
           gachaTitle: (slot.gacha_masters as any)?.title || "不明",
           actionType: null,
           status: null,
           trackingNumber: null,
           requestedAt: null,
           processedAt: null,
-        } as InventoryItem));
+        } as InventoryItem;
+      });
 
       return unselected;
     },
@@ -138,7 +154,6 @@ const Inventory = () => {
         .from("inventory_actions")
         .select(`
           *,
-          cards!inner(id, name, image_url, prize_tier, conversion_points),
           gacha_slots!inner(gacha_id, gacha_masters!inner(title))
         `)
         .eq("user_id", user.id)
@@ -147,22 +162,37 @@ const Inventory = () => {
         .order("requested_at", { ascending: false });
 
       if (error) throw error;
+      if (!data || data.length === 0) return [];
 
-      return (data || []).map(item => ({
-        id: item.id,
-        slotId: item.slot_id || "",
-        cardId: (item.cards as any)?.id,
-        cardName: (item.cards as any)?.name || "不明",
-        cardImageUrl: (item.cards as any)?.image_url,
-        prizeTier: (item.cards as any)?.prize_tier || "miss",
-        conversionPoints: (item.cards as any)?.conversion_points || 0,
-        gachaTitle: (item.gacha_slots as any)?.gacha_masters?.title || "不明",
-        actionType: item.action_type as "shipping",
-        status: item.status,
-        trackingNumber: item.tracking_number,
-        requestedAt: item.requested_at,
-        processedAt: item.processed_at,
-      } as InventoryItem));
+      // カード情報をcards_publicビューから取得
+      const cardIds = [...new Set(data.map(a => a.card_id).filter(Boolean))];
+      const { data: cardsData, error: cardsError } = await supabase
+        .from("cards_public")
+        .select("id, name, image_url, prize_tier, conversion_points")
+        .in("id", cardIds as string[]);
+
+      if (cardsError) throw cardsError;
+
+      const cardsMap = new Map(cardsData?.map(c => [c.id, c]) || []);
+
+      return data.map(item => {
+        const card = cardsMap.get(item.card_id);
+        return {
+          id: item.id,
+          slotId: item.slot_id || "",
+          cardId: card?.id || item.card_id || "",
+          cardName: card?.name || "不明",
+          cardImageUrl: card?.image_url || null,
+          prizeTier: card?.prize_tier || "miss",
+          conversionPoints: card?.conversion_points || 0,
+          gachaTitle: (item.gacha_slots as any)?.gacha_masters?.title || "不明",
+          actionType: item.action_type as "shipping",
+          status: item.status,
+          trackingNumber: item.tracking_number,
+          requestedAt: item.requested_at,
+          processedAt: item.processed_at,
+        } as InventoryItem;
+      });
     },
     enabled: !!user,
   });
@@ -177,7 +207,6 @@ const Inventory = () => {
         .from("inventory_actions")
         .select(`
           *,
-          cards!inner(id, name, image_url, prize_tier, conversion_points),
           gacha_slots!inner(gacha_id, gacha_masters!inner(title))
         `)
         .eq("user_id", user.id)
@@ -186,22 +215,37 @@ const Inventory = () => {
         .order("processed_at", { ascending: false });
 
       if (error) throw error;
+      if (!data || data.length === 0) return [];
 
-      return (data || []).map(item => ({
-        id: item.id,
-        slotId: item.slot_id || "",
-        cardId: (item.cards as any)?.id,
-        cardName: (item.cards as any)?.name || "不明",
-        cardImageUrl: (item.cards as any)?.image_url,
-        prizeTier: (item.cards as any)?.prize_tier || "miss",
-        conversionPoints: (item.cards as any)?.conversion_points || 0,
-        gachaTitle: (item.gacha_slots as any)?.gacha_masters?.title || "不明",
-        actionType: item.action_type as "shipping",
-        status: item.status,
-        trackingNumber: item.tracking_number,
-        requestedAt: item.requested_at,
-        processedAt: item.processed_at,
-      } as InventoryItem));
+      // カード情報をcards_publicビューから取得
+      const cardIds = [...new Set(data.map(a => a.card_id).filter(Boolean))];
+      const { data: cardsData, error: cardsError } = await supabase
+        .from("cards_public")
+        .select("id, name, image_url, prize_tier, conversion_points")
+        .in("id", cardIds as string[]);
+
+      if (cardsError) throw cardsError;
+
+      const cardsMap = new Map(cardsData?.map(c => [c.id, c]) || []);
+
+      return data.map(item => {
+        const card = cardsMap.get(item.card_id);
+        return {
+          id: item.id,
+          slotId: item.slot_id || "",
+          cardId: card?.id || item.card_id || "",
+          cardName: card?.name || "不明",
+          cardImageUrl: card?.image_url || null,
+          prizeTier: card?.prize_tier || "miss",
+          conversionPoints: card?.conversion_points || 0,
+          gachaTitle: (item.gacha_slots as any)?.gacha_masters?.title || "不明",
+          actionType: item.action_type as "shipping",
+          status: item.status,
+          trackingNumber: item.tracking_number,
+          requestedAt: item.requested_at,
+          processedAt: item.processed_at,
+        } as InventoryItem;
+      });
     },
     enabled: !!user,
   });
