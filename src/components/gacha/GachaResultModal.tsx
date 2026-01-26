@@ -236,6 +236,8 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
 
   const handleSkipSelection = () => {
     // 選択せずに閉じる（後でインベントリから選択可能）
+    // インベントリキャッシュを無効化して、新しいアイテムが表示されるようにする
+    queryClient.invalidateQueries({ queryKey: ["inventory-unselected"] });
     onClose();
   };
 
