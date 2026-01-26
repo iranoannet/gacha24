@@ -830,8 +830,12 @@ export function GachaAnimationSystem({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          onClick={handleSkip}
-          className="absolute bottom-8 right-8 px-6 py-3 bg-foreground/20 hover:bg-foreground/30 backdrop-blur-sm rounded-full text-white font-bold text-sm transition-colors z-50"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleSkip();
+          }}
+          className="absolute bottom-8 right-8 px-6 py-3 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full text-white font-bold text-sm transition-colors z-[120] cursor-pointer border border-white/30"
+          style={{ pointerEvents: "auto" }}
         >
           スキップ →
         </motion.button>
