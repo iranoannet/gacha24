@@ -253,7 +253,6 @@ const GachaDetail = () => {
     }
 
     setShowConfirm(false);
-    setIsPlaying(true);
 
     try {
       const { data, error } = await supabase.functions.invoke("play-gacha", {
@@ -276,7 +275,7 @@ const GachaDetail = () => {
       const params = getAnimationParamsForPrizeTier(highestTier, count);
       setAnimParams(params);
 
-      // B演出用にカードデータをstateにセット
+      // B演出用にカードデータをstateにセット（演出開始前に設定）
       setPendingDrawnCards(data.drawnCards);
 
       // 結果をRefに保持（演出完了後に表示）
@@ -285,6 +284,10 @@ const GachaDetail = () => {
         totalCost: data.totalCost,
         newBalance: data.newBalance,
       };
+
+      // データ設定後に演出を開始
+      console.log("[GachaDetail] Starting animation, type:", gacha.animation_type, "cards:", data.drawnCards.length);
+      setIsPlaying(true);
 
       // キャッシュを更新
       queryClient.invalidateQueries({ queryKey: ["gacha-detail", id] });
