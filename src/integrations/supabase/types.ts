@@ -138,6 +138,7 @@ export type Database = {
           gacha_id: string
           id: string
           is_drawn: boolean
+          selection_deadline: string | null
           slot_number: number
           transaction_id: string | null
           user_id: string | null
@@ -149,6 +150,7 @@ export type Database = {
           gacha_id: string
           id?: string
           is_drawn?: boolean
+          selection_deadline?: string | null
           slot_number: number
           transaction_id?: string | null
           user_id?: string | null
@@ -160,6 +162,7 @@ export type Database = {
           gacha_id?: string
           id?: string
           is_drawn?: boolean
+          selection_deadline?: string | null
           slot_number?: number
           transaction_id?: string | null
           user_id?: string | null
