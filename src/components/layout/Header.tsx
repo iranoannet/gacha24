@@ -70,7 +70,10 @@ const Header = () => {
               <Button
                 size="sm"
                 className="btn-gacha h-8 px-3 text-sm font-bold"
-                onClick={() => navigate("/auth?mode=signup")}
+                onClick={() => {
+                  console.log("[Header] Sign up clicked");
+                  navigate("/auth?mode=signup");
+                }}
               >
                 新規登録
               </Button>
@@ -80,12 +83,17 @@ const Header = () => {
                 size="sm"
                 variant="outline"
                 className="h-8 px-3 text-sm border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-                onClick={() => navigate("/auth?mode=login")}
+                onClick={() => {
+                  console.log("[Header] Login clicked");
+                  navigate("/auth?mode=login");
+                }}
               >
                 ログイン
               </Button>
             </>
-          ) : null}
+          ) : (
+            <span className="text-xs text-muted-foreground">読込中...</span>
+          )}
         </div>
       </div>
     </header>
