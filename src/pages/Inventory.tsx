@@ -74,12 +74,10 @@ const Inventory = () => {
     userProfile?.last_name && userProfile?.first_name && userProfile?.phone_number;
 
   // ユーザーの当選スロット（inventory_actionに登録されていないもの = 未選択）を取得
-  const { data: unselectedItems, isLoading: isLoadingUnselected, error: unselectedError } = useQuery({
+  const { data: unselectedItems, isLoading: isLoadingUnselected } = useQuery({
     queryKey: ["inventory-unselected", user?.id],
     queryFn: async () => {
       if (!user) return [];
-
-      console.log("Fetching slots for user:", user.id);
 
       // 当選したスロットを取得（JOINを使わずシンプルに）
       const { data: slots, error: slotsError } = await supabase
@@ -87,8 +85,6 @@ const Inventory = () => {
         .select("id, card_id, gacha_id")
         .eq("user_id", user.id)
         .eq("is_drawn", true);
-
-      console.log("Slots result:", { slots, slotsError });
 
       if (slotsError) throw slotsError;
       if (!slots || slots.length === 0) return [];
@@ -512,11 +508,6 @@ const Inventory = () => {
           </TabsList>
 
           <TabsContent value="unselected" className="mt-6">
-            {unselectedError && (
-              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-4">
-                <p className="text-sm text-destructive">エラー: {(unselectedError as Error).message}</p>
-              </div>
-            )}
             {isLoadingUnselected ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -525,7 +516,6 @@ const Inventory = () => {
               <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                 <Package className="h-16 w-16 mb-4 opacity-30" />
                 <p className="text-sm">未選択の獲得商品がありません</p>
-                <p className="text-xs mt-2">User ID: {user?.id}</p>
               </div>
             ) : (
               <div className="space-y-4">
