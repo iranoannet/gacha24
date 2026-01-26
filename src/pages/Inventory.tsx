@@ -496,10 +496,36 @@ const Inventory = () => {
     );
   }
 
+  // デバッグ情報
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const debugInfo = {
+    userId: user?.id?.substring(0, 8) + "...",
+    email: user?.email,
+    isMobile,
+    unselectedCount: unselectedItems?.length ?? "loading",
+    unselectedError: unselectedError?.message,
+    pendingCount: pendingItems?.length ?? "loading",
+    shippedCount: shippedItems?.length ?? "loading",
+  };
+
   return (
     <MainLayout>
       <div className="container px-4 py-6">
         <h1 className="text-xl font-bold mb-4">獲得商品</h1>
+
+        {/* デバッグ表示（後で削除） */}
+        <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-3 mb-4 text-xs">
+          <p className="font-bold text-yellow-700 mb-1">🔧 デバッグ情報（開発用）</p>
+          <p>ユーザーID: {debugInfo.userId}</p>
+          <p>メール: {debugInfo.email}</p>
+          <p>モバイル: {debugInfo.isMobile ? "はい" : "いいえ"}</p>
+          <p>未選択件数: {debugInfo.unselectedCount}</p>
+          {debugInfo.unselectedError && (
+            <p className="text-red-500">エラー: {debugInfo.unselectedError}</p>
+          )}
+          <p>発送待ち: {debugInfo.pendingCount}</p>
+          <p>発送済み: {debugInfo.shippedCount}</p>
+        </div>
 
         <Tabs defaultValue="unselected" className="w-full">
           <TabsList className="w-full grid grid-cols-3 bg-muted">
