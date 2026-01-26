@@ -651,14 +651,14 @@ const GachaDetail = () => {
       />
 
       {/* Animation - 演出タイプに応じて切り替え */}
-      {(gacha as any).animation_type === "B" ? (
+      {gacha.animation_type === "B" ? (
         <CardPackAnimation
           isPlaying={isPlaying}
           onComplete={handleAnimationComplete}
           onSkip={handleAnimationComplete}
           drawnCards={pendingDrawnCards}
           playCount={pendingPlayCount}
-          fakeSChance={(gacha as any).fake_s_tier_chance ?? 15}
+          fakeSChance={gacha.fake_s_tier_chance ?? 15}
         />
       ) : (
         <GachaAnimationSystem
