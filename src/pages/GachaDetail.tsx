@@ -626,7 +626,7 @@ const GachaDetail = () => {
               >
                 <div className="flex flex-col items-center">
                   <span>最後まで</span>
-                  <span className="text-[10px] opacity-80">{gacha.remaining_slots}回</span>
+                  <span className="text-[10px] opacity-80">{(gacha.price_per_play * gacha.remaining_slots).toLocaleString()}pt</span>
                 </div>
               </Button>
             </div>
