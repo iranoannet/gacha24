@@ -129,21 +129,36 @@ export function CardPackAnimation({
     setScene(1);
     sound.playSlotSpin();
     
+    // 賞に応じたサスペンス音を早めに開始
+    if (highestTier === "S" || highestTier === "A" || highestTier === "B" || isFakeOut) {
+      timers.push(setTimeout(() => {
+        sound.playSuspense(isFakeOut ? "S" : highestTier as "S" | "A" | "B");
+      }, 300));
+    }
+    
     // Scene 2: 破裂 (1.2-2.5s)
     timers.push(setTimeout(() => {
       setScene(2);
       setShowFlash(true);
       sound.playImpact();
       setTimeout(() => setShowFlash(false), 200);
-      if (config.isRainbow || isFakeOut) {
-        sound.playDrumRoll(1);
-      }
+      
+      // ドキドキ演出 - 全賞で
+      const intensity = highestTier === "S" || isFakeOut ? "high" 
+        : highestTier === "A" ? "high" 
+        : highestTier === "B" ? "medium" 
+        : "low";
+      sound.playDrumRoll(1.2, intensity);
+      sound.playHeartbeat(highestTier === "miss" && !isFakeOut ? 2 : 4);
     }, 1200));
     
     // Scene 3: 商品画像登場 (2.5-4.0s)
     timers.push(setTimeout(() => {
       setScene(3);
-      sound.playReveal(highestTier === "S" || highestTier === "A");
+      // 上昇音
+      if (highestTier !== "miss" || isFakeOut) {
+        sound.playRising(isFakeOut ? "S" : highestTier as "S" | "A" | "B");
+      }
     }, 2500));
     
     // Scene 4: 浮遊・回転 (4.0-6.5s)
@@ -152,7 +167,14 @@ export function CardPackAnimation({
       if (highestTier === "S") {
         sound.playJackpot();
       } else if (highestTier === "A") {
-        sound.playCoinSound(5);
+        sound.playGoldReveal();
+      } else if (highestTier === "B") {
+        sound.playSilverReveal();
+      } else if (isFakeOut) {
+        // フェイクの場合は遅れてミス音
+        setTimeout(() => sound.playMiss(), 500);
+      } else {
+        sound.playMiss();
       }
     }, 4000));
     
@@ -183,20 +205,32 @@ export function CardPackAnimation({
       let count = 0;
       const openInterval = setInterval(() => {
         setRevealedCount(prev => prev + 1);
+        sound.playCoinSound(1); // 開封ごとに軽い音
         count++;
         if (count >= 9) {
           clearInterval(openInterval);
         }
-      }, 600); // 約0.5秒ごとに1枚
+      }, 600);
     }, 2000));
     
-    // Scene 3: 最後の1枚に集中 (8-12s)
+    // Scene 3: 最後の1枚に集中 (8-12s) - 全賞でドキドキ演出
     timers.push(setTimeout(() => {
       setScene(3);
-      sound.playDrumRoll(3);
-      if (config.isRainbow || isFakeOut) {
-        sound.playHeartbeat(4);
+      
+      // サスペンス音開始
+      if (highestTier !== "miss" || isFakeOut) {
+        sound.playSuspense(isFakeOut ? "S" : highestTier as "S" | "A" | "B");
       }
+      
+      // 強度の高いドラムロール
+      const intensity = highestTier === "S" || isFakeOut ? "high" 
+        : highestTier === "A" ? "high" 
+        : highestTier === "B" ? "medium" 
+        : "low";
+      sound.playDrumRoll(3.5, intensity);
+      
+      // ハートビートは全賞で（強度は変える）
+      sound.playHeartbeat(highestTier === "miss" && !isFakeOut ? 3 : 6);
     }, 8000));
     
     // Scene 4: 最後の1枚爆発 (12-15s)
@@ -206,12 +240,26 @@ export function CardPackAnimation({
       sound.playImpact();
       setTimeout(() => setShowFlash(false), 200);
       setRevealedCount(10);
-      if (highestTier === "S") {
-        sound.playJackpot();
-      } else if (highestTier === "A") {
-        sound.playReveal(true);
-        sound.playCoinSound(5);
+      
+      // 上昇音
+      if (highestTier !== "miss" || isFakeOut) {
+        sound.playRising(isFakeOut ? "S" : highestTier as "S" | "A" | "B");
       }
+      
+      // 賞別の確定音
+      setTimeout(() => {
+        if (highestTier === "S") {
+          sound.playJackpot();
+        } else if (highestTier === "A") {
+          sound.playGoldReveal();
+        } else if (highestTier === "B") {
+          sound.playSilverReveal();
+        } else if (isFakeOut) {
+          setTimeout(() => sound.playMiss(), 300);
+        } else {
+          sound.playMiss();
+        }
+      }, 300);
     }, 12000));
     
     // Scene 5: 結果グリッド (15-16.5s)
@@ -241,7 +289,7 @@ export function CardPackAnimation({
       setScene(2);
       let count = 0;
       const openInterval = setInterval(() => {
-        setRevealedCount(prev => Math.min(prev + 3, 100)); // 3枚ずつ
+        setRevealedCount(prev => Math.min(prev + 3, 100));
         count += 3;
         if (count >= 100) {
           clearInterval(openInterval);
@@ -249,10 +297,22 @@ export function CardPackAnimation({
       }, 100);
     }, 3000));
     
-    // Scene 3: スローダウン (12-18s)
+    // Scene 3: スローダウン (12-18s) - ドキドキ感追加
     timers.push(setTimeout(() => {
       setScene(3);
-      sound.playDrumRoll(5);
+      
+      // サスペンス音
+      if (highestTier !== "miss") {
+        sound.playSuspense(highestTier as "S" | "A" | "B");
+      }
+      
+      // 強いドラムロール
+      const intensity = highestTier === "S" ? "high" 
+        : highestTier === "A" ? "high" 
+        : highestTier === "B" ? "medium" 
+        : "low";
+      sound.playDrumRoll(5, intensity);
+      sound.playHeartbeat(highestTier === "miss" ? 4 : 8);
     }, 12000));
     
     // Scene 4: レアカード個別表示 (18-24s)
@@ -263,12 +323,23 @@ export function CardPackAnimation({
         let idx = 0;
         const revealInterval = setInterval(() => {
           setCurrentRevealIndex(idx);
+          const card = rareCards[idx];
           sound.playImpact();
+          // 賞別の確定音
+          setTimeout(() => {
+            if (card.prizeTier === "S") {
+              sound.playJackpot();
+            } else if (card.prizeTier === "A") {
+              sound.playGoldReveal();
+            } else {
+              sound.playSilverReveal();
+            }
+          }, 200);
           idx++;
           if (idx >= rareCards.length) {
             clearInterval(revealInterval);
           }
-        }, 1000);
+        }, 1200);
       }
     }, 18000));
     
@@ -276,8 +347,13 @@ export function CardPackAnimation({
     timers.push(setTimeout(() => {
       setScene(5);
       setShowSummary(true);
+      // 最高賞の確定音
       if (highestTier === "S") {
         sound.playJackpot();
+      } else if (highestTier === "A") {
+        sound.playGoldReveal();
+      } else if (highestTier === "B") {
+        sound.playSilverReveal();
       }
     }, 24000));
     
@@ -287,7 +363,7 @@ export function CardPackAnimation({
     }, 28000));
     
     return () => timers.forEach(clearTimeout);
-  }, [highestTier, onComplete, rareCards.length, sound]);
+  }, [highestTier, onComplete, rareCards, sound]);
 
   // メイン演出制御
   useEffect(() => {
