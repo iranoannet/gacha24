@@ -45,12 +45,13 @@ export function useGachaSound() {
     }
   }, [getAudioContext]);
 
-  // ドラムロール（期待煽り）
-  const playDrumRoll = useCallback((duration: number = 2) => {
+  // ドラムロール（期待煽り）- 強度レベル追加
+  const playDrumRoll = useCallback((duration: number = 2, intensity: "low" | "medium" | "high" = "medium") => {
     const { ctx, gain } = getAudioContext();
     const now = ctx.currentTime;
-    const interval = 0.03;
+    const interval = intensity === "high" ? 0.02 : intensity === "medium" ? 0.03 : 0.04;
     const count = Math.floor(duration / interval);
+    const maxVolume = intensity === "high" ? 0.35 : intensity === "medium" ? 0.25 : 0.15;
     
     for (let i = 0; i < count; i++) {
       const osc = ctx.createOscillator();
@@ -58,15 +59,16 @@ export function useGachaSound() {
       const filter = ctx.createBiquadFilter();
       
       osc.type = "triangle";
-      // ピッチを徐々に上げる
+      // ピッチを徐々に上げる（高強度ほど高い音程へ）
       const progress = i / count;
-      osc.frequency.value = 100 + progress * 200;
+      const baseFreq = intensity === "high" ? 120 : intensity === "medium" ? 100 : 80;
+      osc.frequency.value = baseFreq + progress * (intensity === "high" ? 300 : 200);
       
       filter.type = "lowpass";
-      filter.frequency.value = 500 + progress * 2000;
+      filter.frequency.value = 500 + progress * (intensity === "high" ? 3000 : 2000);
       
       envGain.gain.setValueAtTime(0, now + i * interval);
-      envGain.gain.linearRampToValueAtTime(0.1 + progress * 0.2, now + i * interval + 0.005);
+      envGain.gain.linearRampToValueAtTime(0.1 + progress * maxVolume, now + i * interval + 0.005);
       envGain.gain.exponentialRampToValueAtTime(0.001, now + i * interval + 0.025);
       
       osc.connect(filter);
@@ -75,6 +77,213 @@ export function useGachaSound() {
       
       osc.start(now + i * interval);
       osc.stop(now + i * interval + 0.025);
+    }
+  }, [getAudioContext]);
+
+  // サスペンス音（じわじわ緊張感）- A賞・B賞用
+  const playSuspense = useCallback((tier: "S" | "A" | "B" = "A") => {
+    const { ctx, gain } = getAudioContext();
+    const now = ctx.currentTime;
+    
+    // 不協和音を含む緊張感のある和音
+    const chords = {
+      S: [220, 277.18, 329.63, 415.30], // Am7系
+      A: [196, 246.94, 293.66, 369.99], // Gm7系
+      B: [174.61, 220, 261.63, 329.63], // Fm7系
+    };
+    
+    const notes = chords[tier];
+    const duration = tier === "S" ? 3 : tier === "A" ? 2.5 : 2;
+    
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const envGain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      
+      osc.type = "sine";
+      // ゆっくりとしたビブラート
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.frequency.value = 4 + i;
+      lfoGain.gain.value = freq * 0.02;
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      lfo.start(now);
+      lfo.stop(now + duration);
+      
+      osc.frequency.value = freq;
+      
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(500, now);
+      filter.frequency.linearRampToValueAtTime(2000, now + duration * 0.8);
+      
+      envGain.gain.setValueAtTime(0, now);
+      envGain.gain.linearRampToValueAtTime(0.08, now + 0.5);
+      envGain.gain.setValueAtTime(0.08, now + duration * 0.7);
+      envGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      
+      osc.connect(filter);
+      filter.connect(envGain);
+      envGain.connect(gain);
+      
+      osc.start(now);
+      osc.stop(now + duration);
+    });
+  }, [getAudioContext]);
+
+  // 期待上昇音（ウィーン↑）
+  const playRising = useCallback((tier: "S" | "A" | "B" = "A") => {
+    const { ctx, gain } = getAudioContext();
+    const now = ctx.currentTime;
+    
+    const config = {
+      S: { startFreq: 200, endFreq: 1200, duration: 1.5, volume: 0.25 },
+      A: { startFreq: 180, endFreq: 900, duration: 1.2, volume: 0.2 },
+      B: { startFreq: 150, endFreq: 600, duration: 1, volume: 0.15 },
+    };
+    
+    const { startFreq, endFreq, duration, volume } = config[tier];
+    
+    const osc = ctx.createOscillator();
+    const envGain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(startFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+    
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(startFreq * 2, now);
+    filter.frequency.exponentialRampToValueAtTime(endFreq * 2, now + duration);
+    
+    envGain.gain.setValueAtTime(0, now);
+    envGain.gain.linearRampToValueAtTime(volume, now + 0.1);
+    envGain.gain.setValueAtTime(volume, now + duration * 0.8);
+    envGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    
+    osc.connect(filter);
+    filter.connect(envGain);
+    envGain.connect(gain);
+    
+    osc.start(now);
+    osc.stop(now + duration);
+  }, [getAudioContext]);
+
+  // A賞確定音（ゴールドファンファーレ）
+  const playGoldReveal = useCallback(() => {
+    const { ctx, gain } = getAudioContext();
+    const now = ctx.currentTime;
+    
+    // ブラス風のファンファーレ
+    const notes = [392, 493.88, 587.33, 783.99, 987.77]; // G4→B4→D5→G5→B5
+    
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const envGain = ctx.createGain();
+      
+      osc.type = "sawtooth";
+      osc.frequency.value = freq;
+      
+      const startTime = now + i * 0.12;
+      envGain.gain.setValueAtTime(0, startTime);
+      envGain.gain.linearRampToValueAtTime(0.22, startTime + 0.03);
+      envGain.gain.setValueAtTime(0.22, startTime + 0.2);
+      envGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.7);
+      
+      osc.connect(envGain);
+      envGain.connect(gain);
+      
+      osc.start(startTime);
+      osc.stop(startTime + 0.7);
+    });
+    
+    // キラキラ効果
+    for (let i = 0; i < 15; i++) {
+      const osc = ctx.createOscillator();
+      const envGain = ctx.createGain();
+      
+      osc.type = "sine";
+      osc.frequency.value = 2500 + Math.random() * 2500;
+      
+      const startTime = now + 0.4 + i * 0.04;
+      envGain.gain.setValueAtTime(0, startTime);
+      envGain.gain.linearRampToValueAtTime(0.1, startTime + 0.015);
+      envGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18);
+      
+      osc.connect(envGain);
+      envGain.connect(gain);
+      
+      osc.start(startTime);
+      osc.stop(startTime + 0.18);
+    }
+    
+    // 和音フィニッシュ
+    const chord = [392, 493.88, 587.33, 783.99];
+    chord.forEach(freq => {
+      const osc = ctx.createOscillator();
+      const envGain = ctx.createGain();
+      
+      osc.type = "sawtooth";
+      osc.frequency.value = freq;
+      
+      const startTime = now + 0.8;
+      envGain.gain.setValueAtTime(0, startTime);
+      envGain.gain.linearRampToValueAtTime(0.12, startTime + 0.04);
+      envGain.gain.exponentialRampToValueAtTime(0.001, startTime + 1.2);
+      
+      osc.connect(envGain);
+      envGain.connect(gain);
+      
+      osc.start(startTime);
+      osc.stop(startTime + 1.2);
+    });
+  }, [getAudioContext]);
+
+  // B賞確定音（シルバーチャイム）
+  const playSilverReveal = useCallback(() => {
+    const { ctx, gain } = getAudioContext();
+    const now = ctx.currentTime;
+    
+    // チャイム風の音
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5→E5→G5→C6
+    
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const envGain = ctx.createGain();
+      
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      
+      const startTime = now + i * 0.1;
+      envGain.gain.setValueAtTime(0, startTime);
+      envGain.gain.linearRampToValueAtTime(0.18, startTime + 0.02);
+      envGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.6);
+      
+      osc.connect(envGain);
+      envGain.connect(gain);
+      
+      osc.start(startTime);
+      osc.stop(startTime + 0.6);
+    });
+    
+    // 軽いキラキラ
+    for (let i = 0; i < 8; i++) {
+      const osc = ctx.createOscillator();
+      const envGain = ctx.createGain();
+      
+      osc.type = "sine";
+      osc.frequency.value = 3000 + Math.random() * 2000;
+      
+      const startTime = now + 0.3 + i * 0.05;
+      envGain.gain.setValueAtTime(0, startTime);
+      envGain.gain.linearRampToValueAtTime(0.06, startTime + 0.01);
+      envGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.12);
+      
+      osc.connect(envGain);
+      envGain.connect(gain);
+      
+      osc.start(startTime);
+      osc.stop(startTime + 0.12);
     }
   }, [getAudioContext]);
 
@@ -344,6 +553,10 @@ export function useGachaSound() {
     playHeartbeat,
     playJackpot,
     playMiss,
+    playSuspense,
+    playRising,
+    playGoldReveal,
+    playSilverReveal,
     stopAll,
-  }), [playSlotSpin, playDrumRoll, playReveal, playCoinSound, playImpact, playHeartbeat, playJackpot, playMiss, stopAll]);
+  }), [playSlotSpin, playDrumRoll, playReveal, playCoinSound, playImpact, playHeartbeat, playJackpot, playMiss, playSuspense, playRising, playGoldReveal, playSilverReveal, stopAll]);
 }
