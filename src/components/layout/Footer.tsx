@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 const Footer = () => {
   return (
     <footer className="bg-footer text-footer-foreground py-8 pb-24">
@@ -8,19 +10,19 @@ const Footer = () => {
             <h3 className="text-sm font-bold mb-3">トレカガチャについて</h3>
             <ul className="space-y-2 text-xs text-muted-foreground">
               <li>
-                <a href="#" className="hover:text-primary transition-colors">
+                <Link to="/terms" className="hover:text-primary transition-colors">
                   利用規約
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-primary transition-colors">
+                <Link to="/privacy" className="hover:text-primary transition-colors">
                   プライバシーポリシー
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-primary transition-colors">
+                <Link to="/legal" className="hover:text-primary transition-colors">
                   特定商取引法に基づく表記
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
