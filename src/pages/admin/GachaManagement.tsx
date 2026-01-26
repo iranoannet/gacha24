@@ -85,6 +85,7 @@ export default function GachaManagement() {
     category: null as CardCategory | null,
     notice_text: defaultNotice,
     animation_type: "A" as "A" | "B", // A = スロット風, B = カードパック開封風
+    fake_s_tier_chance: 15, // フェイク演出確率（0-100%）
   });
 
   // ガチャ一覧
@@ -246,6 +247,7 @@ export default function GachaManagement() {
       category: null,
       notice_text: defaultNotice,
       animation_type: "A",
+      fake_s_tier_chance: 15,
     });
     setSelectedItems([]);
     setBannerFile(null);
@@ -400,6 +402,7 @@ export default function GachaManagement() {
         category: (gacha as any).category || null,
         notice_text: (gacha as any).notice_text || defaultNotice,
         animation_type: (gacha as any).animation_type || "A",
+        fake_s_tier_chance: (gacha as any).fake_s_tier_chance ?? 15,
       });
       setSelectedCategory((gacha as any).category || null);
       setSelectedItems(copiedItems);
@@ -428,6 +431,7 @@ export default function GachaManagement() {
       category: (gacha as any).category || null,
       notice_text: (gacha as any).notice_text || defaultNotice,
       animation_type: (gacha as any).animation_type || "A",
+      fake_s_tier_chance: (gacha as any).fake_s_tier_chance ?? 15,
     });
     setBannerFile(null);
     setBannerPreview(gacha.banner_url || null);
@@ -775,6 +779,24 @@ export default function GachaManagement() {
                         : "カードパックが破れて中からカードが飛び出す演出です"}
                     </p>
                   </div>
+                  
+                  {/* フェイク演出確率（B演出時のみ） */}
+                  {formData.animation_type === "B" && (
+                    <div>
+                      <Label>フェイク演出確率: {formData.fake_s_tier_chance}%</Label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={50}
+                        value={formData.fake_s_tier_chance}
+                        onChange={(e) => setFormData({ ...formData, fake_s_tier_chance: parseInt(e.target.value) })}
+                        className="w-full mt-2"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        ハズレでもS賞風の演出が出る確率（ドキドキ演出）
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* 商品ごとの枚数・賞設定 */}
@@ -1071,6 +1093,24 @@ export default function GachaManagement() {
                     : "カードパックが破れて中からカードが飛び出す演出です"}
                 </p>
               </div>
+              
+              {/* フェイク演出確率（B演出時のみ） */}
+              {formData.animation_type === "B" && (
+                <div>
+                  <Label>フェイク演出確率: {formData.fake_s_tier_chance}%</Label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={50}
+                    value={formData.fake_s_tier_chance}
+                    onChange={(e) => setFormData({ ...formData, fake_s_tier_chance: parseInt(e.target.value) })}
+                    className="w-full mt-2"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ハズレでもS賞風の演出が出る確率（ドキドキ演出）
+                  </p>
+                </div>
+              )}
               <div>
                 <Label htmlFor="edit-status">ステータス</Label>
                 <Select
