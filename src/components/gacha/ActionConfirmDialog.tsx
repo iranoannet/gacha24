@@ -59,13 +59,8 @@ export function ActionConfirmDialog({
           <div className="text-center mb-6">
             {isShipping ? (
               <>
-                <p className="text-foreground font-bold text-lg mb-3">
+                <p className="text-foreground font-bold text-lg mb-4">
                   {itemCount}件のアイテムを発送依頼しますか？
-                </p>
-                <p className="text-muted-foreground text-sm mb-4">
-                  発送依頼後、管理者が順次発送処理を行います。
-                  <br />
-                  発送状況は「インベントリ」から確認できます。
                 </p>
                 <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
                   <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
