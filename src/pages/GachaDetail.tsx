@@ -562,6 +562,11 @@ const GachaDetail = () => {
               <p className="text-sm text-muted-foreground whitespace-pre-line">
                 {(gacha as any).notice_text}
               </p>
+              <p className="text-sm text-primary mt-3">
+                <a href="/terms" className="underline hover:no-underline">
+                  利用規約はこちら
+                </a>
+              </p>
             </section>
           )}
         </main>
