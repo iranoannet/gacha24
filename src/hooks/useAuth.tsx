@@ -1,7 +1,6 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
 
 interface AuthContextType {
   user: User | null;
@@ -18,7 +17,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -63,10 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     console.log("[Auth] Signing out...");
-    // Clear React Query cache first
-    queryClient.clear();
     
-    // Sign out from Supabase
+    // Sign out from Supabase with global scope
     const { error } = await supabase.auth.signOut({ scope: 'global' });
     if (error) {
       console.error("[Auth] Sign out error:", error);
