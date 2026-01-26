@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useGachaSound } from "@/hooks/useGachaSound";
-import { Package, Sparkles, Star } from "lucide-react";
+import { Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface DrawnCard {
@@ -22,12 +22,6 @@ interface CardPackAnimationProps {
   fakeSChance?: number;
 }
 
-// 7色レインボー
-const RAINBOW_COLORS = [
-  "#ff0000", "#ff7f00", "#ffff00", "#00ff00", 
-  "#00ffff", "#007fff", "#8b00ff"
-];
-
 // 賞に応じた演出設定
 const TIER_CONFIG = {
   S: {
@@ -36,6 +30,7 @@ const TIER_CONFIG = {
     label: "★S賞★",
     labelBg: "bg-gradient-to-r from-yellow-400 via-amber-500 to-orange-500",
     borderColor: "#ffd700",
+    lightColor: "#ffd700",
   },
   A: {
     glowColor: "rgba(255, 180, 0, 0.7)",
@@ -43,6 +38,7 @@ const TIER_CONFIG = {
     label: "A賞",
     labelBg: "bg-gradient-to-r from-amber-400 to-yellow-500",
     borderColor: "#ffb300",
+    lightColor: "#ffc107",
   },
   B: {
     glowColor: "rgba(100, 150, 255, 0.6)",
@@ -50,15 +46,23 @@ const TIER_CONFIG = {
     label: "B賞",
     labelBg: "bg-gradient-to-r from-blue-400 to-purple-500",
     borderColor: "#4a90d9",
+    lightColor: "#64b5f6",
   },
   miss: {
-    glowColor: "rgba(150, 150, 150, 0.4)",
+    glowColor: "rgba(200, 200, 200, 0.4)",
     isRainbow: false,
     label: "C賞",
     labelBg: "bg-gray-500",
-    borderColor: "#888888",
+    borderColor: "#aaaaaa",
+    lightColor: "#ffffff",
   },
 };
+
+// レインボー色
+const RAINBOW_COLORS = [
+  "#ff0000", "#ff7f00", "#ffff00", "#00ff00", 
+  "#00ffff", "#007fff", "#8b00ff"
+];
 
 export function CardPackAnimation({
   isPlaying,
@@ -68,11 +72,9 @@ export function CardPackAnimation({
   playCount,
   fakeSChance = 15,
 }: CardPackAnimationProps) {
-  // シーン管理
   const [scene, setScene] = useState(0);
-  const [showFlash, setShowFlash] = useState(false);
-  const [rainbowIndex, setRainbowIndex] = useState(0);
   const [isFakeOut, setIsFakeOut] = useState(false);
+  const [rainbowIndex, setRainbowIndex] = useState(0);
   const [revealedCount, setRevealedCount] = useState(0);
   const [currentRevealIndex, setCurrentRevealIndex] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
@@ -102,14 +104,14 @@ export function CardPackAnimation({
     }
   }, [isPlaying, highestTier, fakeSChance]);
 
-  // レインボーサイクル
+  // レインボーサイクル（S賞用）
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || highestTier !== "S") return;
     const interval = setInterval(() => {
       setRainbowIndex(prev => (prev + 1) % RAINBOW_COLORS.length);
-    }, 80);
+    }, 120);
     return () => clearInterval(interval);
-  }, [isPlaying]);
+  }, [isPlaying, highestTier]);
 
   // スキップ処理
   const handleSkip = useCallback(() => {
@@ -121,81 +123,77 @@ export function CardPackAnimation({
     }
   }, [sound, onSkip, onComplete]);
 
-  // ========== 1連演出 (9秒) ==========
+  // ========== 1連演出 (10秒) - 新シネマティック演出 ==========
   const runSingleAnimation = useCallback(() => {
     const timers: NodeJS.Timeout[] = [];
     
-    // Scene 1: パック登場 (0-1.2s)
+    // Scene 1: 暗い空間 (0-1.5s) - カードシルエット、エッジ発光
     setScene(1);
-    sound.playSlotSpin();
+    // 深い環境音（静かな緊張感）
     
-    // 賞に応じたサスペンス音を早めに開始
-    if (highestTier === "S" || highestTier === "A" || highestTier === "B" || isFakeOut) {
-      timers.push(setTimeout(() => {
-        sound.playSuspense(isFakeOut ? "S" : highestTier as "S" | "A" | "B");
-      }, 300));
-    }
-    
-    // Scene 2: 破裂 (1.2-2.5s)
+    // Scene 2: スリーブスライド (1.5-3.0s)
     timers.push(setTimeout(() => {
       setScene(2);
-      setShowFlash(true);
-      sound.playImpact();
-      setTimeout(() => setShowFlash(false), 200);
-      
-      // ドキドキ演出 - 全賞で
+      sound.playSlotSpin(); // スリーブ摩擦音として
+    }, 1500));
+    
+    // Scene 3: カード裏面静止 (3.0-4.5s) - 心臓の鼓動
+    timers.push(setTimeout(() => {
+      setScene(3);
+      // ドキドキ感を全賞で
       const intensity = highestTier === "S" || isFakeOut ? "high" 
         : highestTier === "A" ? "high" 
         : highestTier === "B" ? "medium" 
         : "low";
       sound.playDrumRoll(1.2, intensity);
-      sound.playHeartbeat(highestTier === "miss" && !isFakeOut ? 2 : 4);
-    }, 1200));
+      sound.playHeartbeat(3);
+    }, 3000));
     
-    // Scene 3: 商品画像登場 (2.5-4.0s)
-    timers.push(setTimeout(() => {
-      setScene(3);
-      // 上昇音
-      if (highestTier !== "miss" || isFakeOut) {
-        sound.playRising(isFakeOut ? "S" : highestTier as "S" | "A" | "B");
-      }
-    }, 2500));
-    
-    // Scene 4: 浮遊・回転 (4.0-6.5s)
+    // Scene 4: 瞬間フリップ (4.5-6.0s) - カード表面登場
     timers.push(setTimeout(() => {
       setScene(4);
-      if (highestTier === "S") {
-        sound.playJackpot();
-      } else if (highestTier === "A") {
-        sound.playGoldReveal();
-      } else if (highestTier === "B") {
-        sound.playSilverReveal();
-      } else if (isFakeOut) {
-        // フェイクの場合は遅れてミス音
-        setTimeout(() => sound.playMiss(), 500);
-      } else {
-        sound.playMiss();
-      }
-    }, 4000));
+      sound.playImpact(); // 重いインパクト音
+      
+      // 賞別の確定音
+      setTimeout(() => {
+        if (highestTier === "S") {
+          sound.playJackpot();
+        } else if (highestTier === "A") {
+          sound.playGoldReveal();
+        } else if (highestTier === "B") {
+          sound.playSilverReveal();
+        } else if (isFakeOut) {
+          setTimeout(() => sound.playMiss(), 300);
+        } else {
+          sound.playMiss();
+        }
+      }, 200);
+    }, 4500));
     
-    // Scene 5: 確定・停止 (6.5-8.5s)
+    // Scene 5: ホログラム傾き (6.0-8.0s)
     timers.push(setTimeout(() => {
       setScene(5);
-    }, 6500));
+      sound.playCoinSound(2); // クリスタルスパークル音
+    }, 6000));
+    
+    // Scene 6: 静止・確定 (8.0-10.0s)
+    timers.push(setTimeout(() => {
+      setScene(6);
+    }, 8000));
     
     // 完了
     timers.push(setTimeout(() => {
       onComplete();
-    }, 9000));
+    }, 10000));
     
     return () => timers.forEach(clearTimeout);
-  }, [config.isRainbow, highestTier, isFakeOut, onComplete, sound]);
+  }, [highestTier, isFakeOut, onComplete, sound]);
 
   // ========== 10連演出 (16秒) ==========
   const runTenAnimation = useCallback(() => {
     const timers: NodeJS.Timeout[] = [];
     
-    // Scene 1: 10パック登場 (0-2s)
+    // Scene 1: 10枚のカードシルエット登場 (0-2s)
     setScene(1);
     sound.playSlotSpin();
     
@@ -205,7 +203,7 @@ export function CardPackAnimation({
       let count = 0;
       const openInterval = setInterval(() => {
         setRevealedCount(prev => prev + 1);
-        sound.playCoinSound(1); // 開封ごとに軽い音
+        sound.playCoinSound(1);
         count++;
         if (count >= 9) {
           clearInterval(openInterval);
@@ -213,40 +211,26 @@ export function CardPackAnimation({
       }, 600);
     }, 2000));
     
-    // Scene 3: 最後の1枚に集中 (8-12s) - 全賞でドキドキ演出
+    // Scene 3: 最後の1枚に集中 (8-12s)
     timers.push(setTimeout(() => {
       setScene(3);
-      
-      // サスペンス音開始
       if (highestTier !== "miss" || isFakeOut) {
         sound.playSuspense(isFakeOut ? "S" : highestTier as "S" | "A" | "B");
       }
-      
-      // 強度の高いドラムロール
       const intensity = highestTier === "S" || isFakeOut ? "high" 
         : highestTier === "A" ? "high" 
         : highestTier === "B" ? "medium" 
         : "low";
       sound.playDrumRoll(3.5, intensity);
-      
-      // ハートビートは全賞で（強度は変える）
-      sound.playHeartbeat(highestTier === "miss" && !isFakeOut ? 3 : 6);
+      sound.playHeartbeat(6);
     }, 8000));
     
-    // Scene 4: 最後の1枚爆発 (12-15s)
+    // Scene 4: 最後の1枚フリップ (12-15s)
     timers.push(setTimeout(() => {
       setScene(4);
-      setShowFlash(true);
       sound.playImpact();
-      setTimeout(() => setShowFlash(false), 200);
       setRevealedCount(10);
       
-      // 上昇音
-      if (highestTier !== "miss" || isFakeOut) {
-        sound.playRising(isFakeOut ? "S" : highestTier as "S" | "A" | "B");
-      }
-      
-      // 賞別の確定音
       setTimeout(() => {
         if (highestTier === "S") {
           sound.playJackpot();
@@ -274,7 +258,7 @@ export function CardPackAnimation({
     }, 16500));
     
     return () => timers.forEach(clearTimeout);
-  }, [config.isRainbow, highestTier, isFakeOut, onComplete, sound]);
+  }, [highestTier, isFakeOut, onComplete, sound]);
 
   // ========== 100連演出 (28秒) ==========
   const runHundredAnimation = useCallback(() => {
@@ -297,22 +281,18 @@ export function CardPackAnimation({
       }, 100);
     }, 3000));
     
-    // Scene 3: スローダウン (12-18s) - ドキドキ感追加
+    // Scene 3: スローダウン (12-18s)
     timers.push(setTimeout(() => {
       setScene(3);
-      
-      // サスペンス音
       if (highestTier !== "miss") {
         sound.playSuspense(highestTier as "S" | "A" | "B");
       }
-      
-      // 強いドラムロール
       const intensity = highestTier === "S" ? "high" 
         : highestTier === "A" ? "high" 
         : highestTier === "B" ? "medium" 
         : "low";
       sound.playDrumRoll(5, intensity);
-      sound.playHeartbeat(highestTier === "miss" ? 4 : 8);
+      sound.playHeartbeat(8);
     }, 12000));
     
     // Scene 4: レアカード個別表示 (18-24s)
@@ -325,7 +305,6 @@ export function CardPackAnimation({
           setCurrentRevealIndex(idx);
           const card = rareCards[idx];
           sound.playImpact();
-          // 賞別の確定音
           setTimeout(() => {
             if (card.prizeTier === "S") {
               sound.playJackpot();
@@ -347,7 +326,6 @@ export function CardPackAnimation({
     timers.push(setTimeout(() => {
       setScene(5);
       setShowSummary(true);
-      // 最高賞の確定音
       if (highestTier === "S") {
         sound.playJackpot();
       } else if (highestTier === "A") {
@@ -375,7 +353,6 @@ export function CardPackAnimation({
       return;
     }
 
-    // 回数に応じた演出を実行
     if (playCount === 1) {
       return runSingleAnimation();
     } else if (playCount <= 10) {
@@ -387,11 +364,7 @@ export function CardPackAnimation({
 
   if (!isPlaying) return null;
 
-  // 表示用の背景色（フェイク時はS賞風）
   const displayConfig = isFakeOut && scene < 5 ? TIER_CONFIG.S : config;
-  const bgGradient = displayConfig.isRainbow || (isFakeOut && scene < 5)
-    ? `linear-gradient(135deg, ${RAINBOW_COLORS[rainbowIndex]}, ${RAINBOW_COLORS[(rainbowIndex + 2) % 7]})`
-    : `linear-gradient(to bottom, #0a0a0a, #1a1a2e)`;
 
   return (
     <AnimatePresence>
@@ -400,45 +373,24 @@ export function CardPackAnimation({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[110] overflow-hidden"
-        style={{ background: bgGradient }}
+        style={{ background: "#0a0a0f" }}
       >
-        {/* フラッシュ */}
-        <AnimatePresence>
-          {showFlash && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-50 bg-white"
-            />
-          )}
-        </AnimatePresence>
-
-        {/* 背景ラジアルグロー */}
-        <motion.div
+        {/* 暗いヴォールト空間の背景 */}
+        <div 
           className="absolute inset-0"
-          animate={{ opacity: scene >= 3 ? 0.8 : 0.3 }}
           style={{
-            background: `radial-gradient(circle at center, ${displayConfig.glowColor} 0%, transparent 60%)`,
+            background: "radial-gradient(ellipse at center, #141420 0%, #0a0a0f 70%, #050508 100%)",
           }}
         />
+
+        {/* 微細なダストパーティクル */}
+        <DustParticles />
 
         {/* ========== 1連演出 ========== */}
         {playCount === 1 && (
           <div className="absolute inset-0 flex items-center justify-center">
-            {/* Scene 1: パック浮遊 */}
-            {scene === 1 && (
-              <SinglePackFloating />
-            )}
-
-            {/* Scene 2: 破裂 */}
-            {scene === 2 && (
-              <PackBurst />
-            )}
-
-            {/* Scene 3-5: 商品画像表示 */}
-            {scene >= 3 && drawnCards[0] && (
-              <SingleCardReveal
+            {drawnCards[0] && (
+              <CinematicCardReveal
                 card={drawnCards[0]}
                 scene={scene}
                 config={displayConfig}
@@ -452,42 +404,26 @@ export function CardPackAnimation({
         {/* ========== 10連演出 ========== */}
         {playCount > 1 && playCount <= 10 && (
           <div className="absolute inset-0 flex items-center justify-center">
-            {/* Scene 1: 10パック登場 */}
-            {scene === 1 && (
-              <TenPacksFormation playCount={playCount} />
-            )}
-
-            {/* Scene 2: 高速開封 */}
+            {scene === 1 && <TenCardsSilhouettes playCount={playCount} />}
             {scene === 2 && (
               <RapidOpenSequence
                 cards={drawnCards}
                 revealedCount={Math.min(revealedCount, playCount - 1)}
               />
             )}
-
-            {/* Scene 3: 最後の1パック */}
-            {scene === 3 && (
-              <FinalPackSuspense config={displayConfig} />
-            )}
-
-            {/* Scene 4: 最後の爆発 */}
+            {scene === 3 && <FinalCardSuspense config={displayConfig} />}
             {scene === 4 && drawnCards[drawnCards.length - 1] && (
-              <SingleCardReveal
+              <CinematicCardReveal
                 card={drawnCards[drawnCards.length - 1]}
                 scene={4}
                 config={displayConfig}
                 isFakeOut={isFakeOut}
                 rainbowIndex={rainbowIndex}
+                skipIntro
               />
             )}
-
-            {/* Scene 5: 結果グリッド */}
             {scene === 5 && showSummary && (
-              <ResultsGrid
-                cards={drawnCards}
-                config={config}
-                isFakeOut={isFakeOut}
-              />
+              <ResultsGrid cards={drawnCards} config={config} isFakeOut={isFakeOut} />
             )}
           </div>
         )}
@@ -495,36 +431,19 @@ export function CardPackAnimation({
         {/* ========== 100連演出 ========== */}
         {playCount > 10 && (
           <div className="absolute inset-0 flex items-center justify-center">
-            {/* Scene 1: "100" 数字 */}
-            {scene === 1 && (
-              <BigNumberReveal count={playCount} />
-            )}
-
-            {/* Scene 2: 超高速開封 + カウンター */}
-            {scene === 2 && (
-              <MassOpeningCounter
-                current={revealedCount}
-                total={playCount}
-              />
-            )}
-
-            {/* Scene 3: スローダウン */}
-            {scene === 3 && (
-              <SlowdownPhase config={displayConfig} />
-            )}
-
-            {/* Scene 4: レアカード個別表示 */}
+            {scene === 1 && <BigNumberReveal count={playCount} />}
+            {scene === 2 && <MassOpeningCounter current={revealedCount} total={playCount} />}
+            {scene === 3 && <SlowdownPhase config={displayConfig} />}
             {scene === 4 && rareCards[currentRevealIndex] && (
-              <SingleCardReveal
+              <CinematicCardReveal
                 card={rareCards[currentRevealIndex]}
                 scene={4}
                 config={TIER_CONFIG[rareCards[currentRevealIndex].prizeTier as keyof typeof TIER_CONFIG] || TIER_CONFIG.miss}
                 isFakeOut={false}
                 rainbowIndex={rainbowIndex}
+                skipIntro
               />
             )}
-
-            {/* Scene 5: サマリー画面 */}
             {scene === 5 && showSummary && (
               <HundredResultsSummary
                 cards={drawnCards}
@@ -540,7 +459,7 @@ export function CardPackAnimation({
           <Button 
             variant="ghost" 
             onClick={handleSkip}
-            className="text-white/70 hover:text-white hover:bg-white/10 px-6"
+            className="text-white/50 hover:text-white hover:bg-white/10 px-6"
           >
             スキップ →
           </Button>
@@ -552,87 +471,28 @@ export function CardPackAnimation({
 
 // ========== サブコンポーネント ==========
 
-// 1連: パック浮遊
-function SinglePackFloating() {
+// ダストパーティクル
+function DustParticles() {
   return (
-    <motion.div
-      initial={{ scale: 0.5, opacity: 0, y: 100 }}
-      animate={{ 
-        scale: 1, 
-        opacity: 1, 
-        y: [0, -10, 0],
-      }}
-      transition={{ 
-        y: { repeat: Infinity, duration: 2 },
-        scale: { duration: 0.5 }
-      }}
-      className="relative"
-    >
-      <div 
-        className="w-48 h-72 rounded-xl overflow-hidden relative"
-        style={{
-          background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-          boxShadow: "0 0 60px rgba(255, 200, 50, 0.5), 0 20px 40px rgba(0,0,0,0.5)",
-        }}
-      >
-        {/* ホログラム光沢 */}
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {[...Array(30)].map((_, i) => (
         <motion.div
-          className="absolute inset-0"
-          animate={{
-            background: [
-              "linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.4) 50%, transparent 70%)",
-              "linear-gradient(45deg, transparent 50%, rgba(255,255,255,0.4) 70%, transparent 90%)",
-            ],
-          }}
-          transition={{ duration: 1.5, repeat: Infinity }}
-        />
-        {/* 中央コンテンツ */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <Sparkles className="w-16 h-16 text-yellow-400" />
-          <p className="text-white font-bold mt-2 tracking-widest">CARD PACK</p>
-        </div>
-        {/* 星装飾 */}
-        {[...Array(4)].map((_, i) => (
-          <Star 
-            key={i} 
-            className="absolute w-4 h-4 text-yellow-400 fill-yellow-400"
-            style={{
-              top: i < 2 ? "1rem" : "auto",
-              bottom: i >= 2 ? "1rem" : "auto",
-              left: i % 2 === 0 ? "1rem" : "auto",
-              right: i % 2 === 1 ? "1rem" : "auto",
-            }}
-          />
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-// 破裂エフェクト
-function PackBurst() {
-  const fragments = Array.from({ length: 12 }, (_, i) => ({
-    id: i,
-    angle: (360 / 12) * i,
-  }));
-
-  return (
-    <div className="relative">
-      {fragments.map(f => (
-        <motion.div
-          key={f.id}
-          className="absolute w-4 h-12 bg-white rounded"
-          initial={{ x: 0, y: 0, opacity: 1, rotate: f.angle }}
-          animate={{
-            x: Math.cos(f.angle * Math.PI / 180) * 200,
-            y: Math.sin(f.angle * Math.PI / 180) * 200,
-            opacity: 0,
-            scale: 0.5,
-          }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
+          key={i}
+          className="absolute w-0.5 h-0.5 bg-white/20 rounded-full"
           style={{
-            boxShadow: "0 0 20px white",
-            transformOrigin: "center center",
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+          }}
+          animate={{
+            y: [-20, 20],
+            x: [-10, 10],
+            opacity: [0.1, 0.3, 0.1],
+          }}
+          transition={{
+            duration: 4 + Math.random() * 4,
+            repeat: Infinity,
+            delay: Math.random() * 3,
+            ease: "easeInOut",
           }}
         />
       ))}
@@ -640,176 +500,258 @@ function PackBurst() {
   );
 }
 
-// 1連カード表示
-function SingleCardReveal({ 
+// シネマティックカード演出（1連メイン）
+function CinematicCardReveal({ 
   card, 
   scene, 
   config, 
   isFakeOut,
   rainbowIndex,
+  skipIntro = false,
 }: { 
   card: DrawnCard; 
   scene: number; 
   config: typeof TIER_CONFIG.S;
   isFakeOut: boolean;
   rainbowIndex: number;
+  skipIntro?: boolean;
 }) {
   const isHighTier = card.prizeTier === "S" || card.prizeTier === "A";
+  const isFlipped = scene >= 4;
+  const showHoloTilt = scene >= 5;
+  const showFinal = scene >= 6;
+
+  // シーン別の演出計算
+  const sceneStyles = useMemo(() => {
+    if (scene === 1 && !skipIntro) {
+      // Scene 1: シルエット、エッジのみ発光
+      return {
+        cardOpacity: 0.1,
+        borderGlow: true,
+        sleeveVisible: true,
+        sleeveProgress: 0,
+      };
+    } else if (scene === 2 && !skipIntro) {
+      // Scene 2: スリーブスライド
+      return {
+        cardOpacity: 0.3,
+        borderGlow: true,
+        sleeveVisible: true,
+        sleeveProgress: 1,
+      };
+    } else if (scene === 3 && !skipIntro) {
+      // Scene 3: カード裏面静止
+      return {
+        cardOpacity: 1,
+        borderGlow: true,
+        sleeveVisible: false,
+        showPulse: true,
+      };
+    }
+    // Scene 4以降、またはskipIntro
+    return {
+      cardOpacity: 1,
+      borderGlow: true,
+      sleeveVisible: false,
+    };
+  }, [scene, skipIntro]);
 
   return (
     <motion.div
       className="relative flex flex-col items-center"
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ 
-        scale: 1, 
-        opacity: 1,
-        y: scene === 4 ? [0, -10, 0] : 0,
-        rotateY: scene === 4 ? [0, 5, -5, 0] : 0,
-      }}
-      transition={{ 
-        type: "spring",
-        y: scene === 4 ? { repeat: Infinity, duration: 2 } : {},
-        rotateY: scene === 4 ? { repeat: Infinity, duration: 3 } : {},
-      }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
     >
-      {/* 放射状ライトビーム */}
-      {scene >= 3 && isHighTier && (
-        <div className="absolute inset-0 pointer-events-none">
-          {[...Array(12)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute left-1/2 top-1/2 w-2 origin-bottom"
-              style={{
-                height: "300px",
-                transform: `rotate(${i * 30}deg) translateX(-50%)`,
-                background: `linear-gradient(to top, ${config.glowColor}, transparent)`,
-              }}
-              initial={{ opacity: 0, scaleY: 0 }}
-              animate={{ opacity: 0.4, scaleY: 1 }}
-              transition={{ delay: 0.1 * i, duration: 0.5 }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* 賞ラベル */}
-      <motion.div
-        className={`mb-4 px-8 py-3 ${config.labelBg} text-white text-3xl font-black rounded-full z-10`}
-        initial={{ scale: 0, y: -50 }}
-        animate={{ scale: 1, y: 0 }}
-        style={{
-          boxShadow: `0 0 40px ${config.glowColor}`,
-        }}
-      >
-        {isFakeOut ? "...C賞" : config.label}
-      </motion.div>
-
-      {/* カード */}
-      <motion.div
-        className="relative rounded-xl overflow-hidden"
-        style={{
-          width: "280px",
-          boxShadow: `0 0 60px ${config.glowColor}, 0 20px 40px rgba(0,0,0,0.5)`,
-          border: `4px solid ${config.borderColor}`,
-        }}
-        animate={scene === 4 ? { scale: [1, 1.02, 1] } : {}}
-        transition={scene === 4 ? { repeat: Infinity, duration: 2 } : {}}
-      >
-        <div className="aspect-[3/4] bg-white">
-          {card.imageUrl ? (
-            <img 
-              src={card.imageUrl} 
-              alt={card.name} 
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-100">
-              <Package className="w-16 h-16 text-gray-400" />
-            </div>
-          )}
-        </div>
-
-        {/* レアカード光沢エフェクト */}
-        {isHighTier && (
+      {/* 賞ラベル（フリップ後に表示） */}
+      <AnimatePresence>
+        {isFlipped && (
           <motion.div
-            className="absolute inset-0 pointer-events-none"
-            animate={{
-              background: [
-                "linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.6) 50%, transparent 70%)",
-                "linear-gradient(45deg, transparent 70%, rgba(255,255,255,0.6) 90%, transparent 100%)",
-              ],
-            }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-        )}
-
-        {/* レインボーオーバーレイ（S賞） */}
-        {card.prizeTier === "S" && (
-          <motion.div
-            className="absolute inset-0 pointer-events-none opacity-30"
+            initial={{ scale: 0, y: -30, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            className={`mb-4 px-6 py-2 ${config.labelBg} text-white text-2xl font-black rounded-full z-10`}
             style={{
-              background: `linear-gradient(${rainbowIndex * 30}deg, ${RAINBOW_COLORS[rainbowIndex]}, ${RAINBOW_COLORS[(rainbowIndex + 3) % 7]})`,
+              boxShadow: `0 0 30px ${config.glowColor}`,
             }}
-          />
+          >
+            {isFakeOut ? "...C賞" : config.label}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* カードコンテナ */}
+      <motion.div
+        className="relative"
+        style={{ perspective: "1000px" }}
+        animate={{
+          rotateY: showHoloTilt ? [0, 8, -8, 0] : 0,
+          rotateX: showHoloTilt ? [0, -3, 3, 0] : 0,
+        }}
+        transition={{
+          rotateY: showHoloTilt ? { duration: 4, repeat: Infinity, ease: "easeInOut" } : {},
+          rotateX: showHoloTilt ? { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 0.5 } : {},
+        }}
+      >
+        {/* スリーブ（Scene 1-2） */}
+        <AnimatePresence>
+          {sceneStyles.sleeveVisible && (
+            <motion.div
+              className="absolute inset-0 z-20 pointer-events-none"
+              initial={{ y: 0, opacity: 1 }}
+              animate={{ y: scene === 2 ? -280 : 0, opacity: scene === 2 ? 0 : 0.8 }}
+              exit={{ y: -280, opacity: 0 }}
+              transition={{ duration: 1.5, ease: "easeOut" }}
+            >
+              <div 
+                className="w-[280px] h-[400px] rounded-xl"
+                style={{
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  backdropFilter: "blur(4px)",
+                  boxShadow: "inset 0 0 30px rgba(255,255,255,0.1)",
+                }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* カード本体 */}
+        <motion.div
+          className="relative rounded-xl overflow-hidden"
+          style={{
+            width: "280px",
+            opacity: sceneStyles.cardOpacity,
+            transformStyle: "preserve-3d",
+          }}
+          initial={{ rotateY: skipIntro ? 0 : 180 }}
+          animate={{ 
+            rotateY: isFlipped ? 0 : 180,
+            scale: showFinal ? 1 : isFlipped ? 1.02 : 1,
+          }}
+          transition={{ 
+            rotateY: { duration: 0.4, ease: "easeOut" },
+            scale: { duration: 0.3 },
+          }}
+        >
+          {/* カード裏面 */}
+          <motion.div
+            className="absolute inset-0 rounded-xl"
+            style={{
+              backfaceVisibility: "hidden",
+              transform: "rotateY(180deg)",
+              background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+              border: `2px solid ${config.borderColor}`,
+              boxShadow: sceneStyles.borderGlow 
+                ? `0 0 20px ${config.glowColor}, inset 0 0 20px rgba(255,255,255,0.1)`
+                : "none",
+            }}
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-20 h-28 border-2 border-white/20 rounded-lg" />
+            </div>
+            {/* パルス光（Scene 3） */}
+            {sceneStyles.showPulse && (
+              <motion.div
+                className="absolute inset-0 rounded-xl"
+                animate={{ opacity: [0, 0.3, 0] }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+                style={{ background: `radial-gradient(circle, ${config.lightColor}40 0%, transparent 70%)` }}
+              />
+            )}
+          </motion.div>
+
+          {/* カード表面 */}
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{
+              backfaceVisibility: "hidden",
+              border: `3px solid ${config.borderColor}`,
+              boxShadow: isFlipped 
+                ? `0 0 40px ${config.glowColor}, 0 20px 50px rgba(0,0,0,0.5)`
+                : "none",
+            }}
+          >
+            <div className="aspect-[3/4] bg-white relative">
+              {card.imageUrl ? (
+                <img 
+                  src={card.imageUrl} 
+                  alt={card.name} 
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                  <Package className="w-16 h-16 text-gray-400" />
+                </div>
+              )}
+
+              {/* ホログラフィック反射（Scene 5+） */}
+              {showHoloTilt && isHighTier && (
+                <motion.div
+                  className="absolute inset-0 pointer-events-none"
+                  animate={{
+                    background: [
+                      "linear-gradient(120deg, transparent 20%, rgba(255,255,255,0.4) 50%, transparent 80%)",
+                      "linear-gradient(120deg, transparent 60%, rgba(255,255,255,0.4) 90%, transparent 100%)",
+                      "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.4) 10%, transparent 40%)",
+                    ],
+                  }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
+
+              {/* レインボーオーバーレイ（S賞） */}
+              {card.prizeTier === "S" && isFlipped && (
+                <motion.div
+                  className="absolute inset-0 pointer-events-none opacity-20"
+                  style={{
+                    background: `linear-gradient(${rainbowIndex * 40}deg, ${RAINBOW_COLORS[rainbowIndex]}, ${RAINBOW_COLORS[(rainbowIndex + 3) % 7]})`,
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* エッジライトストリーク（Scene 3） */}
+        {scene === 3 && !skipIntro && (
+          <>
+            {[0, 1, 2, 3].map((i) => (
+              <motion.div
+                key={i}
+                className="absolute"
+                style={{
+                  top: i < 2 ? 0 : "auto",
+                  bottom: i >= 2 ? 0 : "auto",
+                  left: i % 2 === 0 ? 0 : "auto",
+                  right: i % 2 === 1 ? 0 : "auto",
+                  width: i < 2 ? "100%" : "2px",
+                  height: i < 2 ? "2px" : "100%",
+                  background: `linear-gradient(${i < 2 ? "to right" : "to bottom"}, transparent, ${config.lightColor}, transparent)`,
+                }}
+                animate={{ opacity: [0.2, 0.8, 0.2] }}
+                transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
+              />
+            ))}
+          </>
         )}
       </motion.div>
-
-      {/* パーティクル */}
-      {isHighTier && (
-        <div className="absolute inset-0 pointer-events-none">
-          {[...Array(20)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-2 h-2 rounded-full"
-              style={{
-                background: card.prizeTier === "S" 
-                  ? RAINBOW_COLORS[i % RAINBOW_COLORS.length]
-                  : config.glowColor,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-              }}
-              animate={{
-                y: [0, -50, 0],
-                opacity: [0, 1, 0],
-                scale: [0, 1, 0],
-              }}
-              transition={{
-                duration: 2,
-                delay: Math.random() * 2,
-                repeat: Infinity,
-              }}
-            />
-          ))}
-        </div>
-      )}
     </motion.div>
   );
 }
 
-// 10連: パック配列
-function TenPacksFormation({ playCount }: { playCount: number }) {
-  const packs = Array.from({ length: playCount }, (_, i) => i);
-  
+// 10連: カードシルエット配列
+function TenCardsSilhouettes({ playCount }: { playCount: number }) {
   return (
     <div className="flex flex-wrap justify-center gap-3 max-w-xl">
-      {packs.map((_, i) => (
+      {Array.from({ length: playCount }).map((_, i) => (
         <motion.div
           key={i}
-          initial={{ scale: 0, opacity: 0, y: 50 }}
-          animate={{ 
-            scale: 1, 
-            opacity: 1, 
-            y: [0, -5, 0],
-          }}
-          transition={{ 
-            delay: i * 0.1,
-            y: { repeat: Infinity, duration: 2, delay: i * 0.2 }
-          }}
-          className="w-16 h-24 rounded-lg"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 0.3, y: 0 }}
+          transition={{ delay: i * 0.08 }}
+          className="w-12 h-16 rounded border border-white/20"
           style={{
-            background: "linear-gradient(135deg, #1a1a2e, #16213e)",
-            boxShadow: "0 0 20px rgba(255, 200, 50, 0.3), 0 5px 15px rgba(0,0,0,0.3)",
-            border: "1px solid rgba(255, 215, 0, 0.5)",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)",
+            boxShadow: "0 0 10px rgba(255,255,255,0.1)",
           }}
         />
       ))}
@@ -857,28 +799,30 @@ function RapidOpenSequence({
   );
 }
 
-// 10連: 最後の1パックサスペンス
-function FinalPackSuspense({ config }: { config: typeof TIER_CONFIG.S }) {
+// 10連: 最後の1枚サスペンス
+function FinalCardSuspense({ config }: { config: typeof TIER_CONFIG.S }) {
   return (
     <motion.div
       animate={{ 
-        scale: [1, 1.05, 1],
-        rotate: [-2, 2, -2, 2, 0],
+        scale: [1, 1.02, 1],
       }}
-      transition={{ 
-        scale: { repeat: Infinity, duration: 0.5 },
-        rotate: { repeat: Infinity, duration: 0.3 },
-      }}
-      className="w-32 h-48 rounded-xl relative"
+      transition={{ repeat: Infinity, duration: 0.8 }}
+      className="w-28 h-40 rounded-xl relative"
       style={{
         background: "linear-gradient(135deg, #1a1a2e, #16213e)",
-        boxShadow: `0 0 60px ${config.glowColor}, 0 0 100px ${config.glowColor}`,
-        border: `3px solid ${config.borderColor}`,
+        boxShadow: `0 0 40px ${config.glowColor}`,
+        border: `2px solid ${config.borderColor}`,
       }}
     >
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Sparkles className="w-12 h-12 text-yellow-400 animate-pulse" />
-      </div>
+      {/* パルス光 */}
+      <motion.div
+        className="absolute inset-0 rounded-xl"
+        animate={{ opacity: [0.2, 0.5, 0.2] }}
+        transition={{ duration: 1, repeat: Infinity }}
+        style={{
+          background: `radial-gradient(circle, ${config.lightColor}30 0%, transparent 70%)`,
+        }}
+      />
     </motion.div>
   );
 }
@@ -893,7 +837,6 @@ function ResultsGrid({
   config: typeof TIER_CONFIG.S;
   isFakeOut: boolean;
 }) {
-  // 最高賞判定
   const highestTier = cards.some(c => c.prizeTier === "S") ? "S"
     : cards.some(c => c.prizeTier === "A") ? "A"
     : cards.some(c => c.prizeTier === "B") ? "B"
@@ -906,7 +849,6 @@ function ResultsGrid({
       animate={{ scale: 1, opacity: 1 }}
       className="flex flex-col items-center px-4"
     >
-      {/* 賞ラベル */}
       <motion.div
         className={`mb-4 px-6 py-2 ${resultConfig.labelBg} text-white text-2xl font-black rounded-full`}
         style={{ boxShadow: `0 0 30px ${resultConfig.glowColor}` }}
@@ -914,7 +856,6 @@ function ResultsGrid({
         {isFakeOut ? "結果: C賞" : `最高: ${resultConfig.label}`}
       </motion.div>
 
-      {/* グリッド */}
       <div 
         className="grid gap-2 max-h-[50vh] overflow-y-auto p-3 rounded-xl"
         style={{
@@ -997,7 +938,6 @@ function BigNumberReveal({ count }: { count: number }) {
 function MassOpeningCounter({ current, total }: { current: number; total: number }) {
   return (
     <div className="text-center">
-      {/* パーティクル背景 */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {[...Array(30)].map((_, i) => (
           <motion.div
@@ -1021,7 +961,6 @@ function MassOpeningCounter({ current, total }: { current: number; total: number
         ))}
       </div>
 
-      {/* カウンター */}
       <motion.div
         className="text-7xl font-black text-white"
         style={{ textShadow: "0 0 40px rgba(255, 200, 50, 0.8)" }}
@@ -1029,7 +968,6 @@ function MassOpeningCounter({ current, total }: { current: number; total: number
         {current} / {total}
       </motion.div>
       
-      {/* プログレスバー */}
       <div className="w-64 h-3 bg-gray-800 rounded-full mt-4 mx-auto overflow-hidden">
         <motion.div
           className="h-full bg-gradient-to-r from-yellow-400 to-amber-500"
@@ -1056,9 +994,14 @@ function SlowdownPhase({ config }: { config: typeof TIER_CONFIG.S }) {
       >
         レア確認中...
       </motion.div>
-      <Sparkles 
-        className="w-20 h-20 mx-auto"
-        style={{ color: config.borderColor }}
+      <motion.div
+        className="w-16 h-16 mx-auto rounded-full"
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+        style={{
+          border: `3px solid ${config.borderColor}`,
+          borderTopColor: "transparent",
+        }}
       />
     </motion.div>
   );
@@ -1076,7 +1019,6 @@ function HundredResultsSummary({
 }) {
   const config = TIER_CONFIG[highestTier as keyof typeof TIER_CONFIG] || TIER_CONFIG.miss;
   
-  // 賞ごとのカウント
   const tierCounts = {
     S: cards.filter(c => c.prizeTier === "S").length,
     A: cards.filter(c => c.prizeTier === "A").length,
@@ -1090,7 +1032,6 @@ function HundredResultsSummary({
       animate={{ scale: 1, opacity: 1 }}
       className="flex flex-col items-center px-4 max-w-lg"
     >
-      {/* 最高賞 */}
       <motion.div
         className={`mb-4 px-8 py-3 ${config.labelBg} text-white text-3xl font-black rounded-full`}
         style={{ boxShadow: `0 0 40px ${config.glowColor}` }}
@@ -1098,7 +1039,6 @@ function HundredResultsSummary({
         最高: {config.label}
       </motion.div>
 
-      {/* 統計 */}
       <div className="grid grid-cols-4 gap-3 mb-4 w-full">
         {Object.entries(tierCounts).map(([tier, count]) => {
           const tierConfig = TIER_CONFIG[tier === "C" ? "miss" : tier as keyof typeof TIER_CONFIG];
@@ -1117,7 +1057,6 @@ function HundredResultsSummary({
         })}
       </div>
 
-      {/* レアカードグリッド */}
       {rareCards.length > 0 && (
         <div 
           className="grid gap-2 max-h-[35vh] overflow-y-auto p-3 rounded-xl w-full"
