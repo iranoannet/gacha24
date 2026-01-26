@@ -79,19 +79,15 @@ const Inventory = () => {
     queryFn: async () => {
       if (!user) return [];
 
-      // 当選したスロットを取得
+      // 当選したスロットを取得（JOINを使わずシンプルに）
       const { data: slots, error: slotsError } = await supabase
         .from("gacha_slots")
-        .select(`
-          id,
-          card_id,
-          gacha_id,
-          gacha_masters!inner(title)
-        `)
+        .select("id, card_id, gacha_id")
         .eq("user_id", user.id)
         .eq("is_drawn", true);
 
       if (slotsError) throw slotsError;
+      if (!slots || slots.length === 0) return [];
 
       // すでにアクション登録済みのスロットIDを取得
       const { data: actions, error: actionsError } = await supabase
@@ -104,12 +100,12 @@ const Inventory = () => {
       const actionSlotIds = new Set(actions?.map(a => a.slot_id) || []);
 
       // 未選択のスロットをフィルタリング
-      const unselectedSlots = (slots || []).filter(slot => !actionSlotIds.has(slot.id));
+      const unselectedSlots = slots.filter(slot => !actionSlotIds.has(slot.id));
       
       if (unselectedSlots.length === 0) return [];
 
       // カード情報をcards_publicビューから取得
-      const cardIds = [...new Set(unselectedSlots.map(s => s.card_id).filter(Boolean))];
+      const cardIds = [...new Set(unselectedSlots.map(s => s.card_id).filter(Boolean))] as string[];
       const { data: cardsData, error: cardsError } = await supabase
         .from("cards_public")
         .select("id, name, image_url, prize_tier, conversion_points")
@@ -118,6 +114,15 @@ const Inventory = () => {
       if (cardsError) throw cardsError;
 
       const cardsMap = new Map(cardsData?.map(c => [c.id, c]) || []);
+
+      // ガチャタイトルを取得
+      const gachaIds = [...new Set(unselectedSlots.map(s => s.gacha_id).filter(Boolean))];
+      const { data: gachasData } = await supabase
+        .from("gacha_masters")
+        .select("id, title")
+        .in("id", gachaIds);
+
+      const gachaMap = new Map(gachasData?.map(g => [g.id, g.title]) || []);
 
       // 未選択のアイテムをマッピング
       const unselected = unselectedSlots.map(slot => {
@@ -130,7 +135,7 @@ const Inventory = () => {
           cardImageUrl: card?.image_url || null,
           prizeTier: card?.prize_tier || "miss",
           conversionPoints: card?.conversion_points || 0,
-          gachaTitle: (slot.gacha_masters as any)?.title || "不明",
+          gachaTitle: gachaMap.get(slot.gacha_id) || "不明",
           actionType: null,
           status: null,
           trackingNumber: null,
@@ -152,10 +157,7 @@ const Inventory = () => {
 
       const { data, error } = await supabase
         .from("inventory_actions")
-        .select(`
-          *,
-          gacha_slots!inner(gacha_id, gacha_masters!inner(title))
-        `)
+        .select("*, slot_id")
         .eq("user_id", user.id)
         .eq("action_type", "shipping")
         .in("status", ["pending", "processing"])
@@ -164,12 +166,30 @@ const Inventory = () => {
       if (error) throw error;
       if (!data || data.length === 0) return [];
 
+      // スロットからガチャIDを取得
+      const slotIds = [...new Set(data.map(a => a.slot_id).filter(Boolean))] as string[];
+      const { data: slotsData } = await supabase
+        .from("gacha_slots")
+        .select("id, gacha_id")
+        .in("id", slotIds);
+
+      const slotToGachaMap = new Map(slotsData?.map(s => [s.id, s.gacha_id]) || []);
+
+      // ガチャタイトルを取得
+      const gachaIds = [...new Set(slotsData?.map(s => s.gacha_id).filter(Boolean) || [])];
+      const { data: gachasData } = await supabase
+        .from("gacha_masters")
+        .select("id, title")
+        .in("id", gachaIds);
+
+      const gachaMap = new Map(gachasData?.map(g => [g.id, g.title]) || []);
+
       // カード情報をcards_publicビューから取得
-      const cardIds = [...new Set(data.map(a => a.card_id).filter(Boolean))];
+      const cardIds = [...new Set(data.map(a => a.card_id).filter(Boolean))] as string[];
       const { data: cardsData, error: cardsError } = await supabase
         .from("cards_public")
         .select("id, name, image_url, prize_tier, conversion_points")
-        .in("id", cardIds as string[]);
+        .in("id", cardIds);
 
       if (cardsError) throw cardsError;
 
@@ -177,6 +197,7 @@ const Inventory = () => {
 
       return data.map(item => {
         const card = cardsMap.get(item.card_id);
+        const gachaId = slotToGachaMap.get(item.slot_id);
         return {
           id: item.id,
           slotId: item.slot_id || "",
@@ -185,7 +206,7 @@ const Inventory = () => {
           cardImageUrl: card?.image_url || null,
           prizeTier: card?.prize_tier || "miss",
           conversionPoints: card?.conversion_points || 0,
-          gachaTitle: (item.gacha_slots as any)?.gacha_masters?.title || "不明",
+          gachaTitle: gachaId ? gachaMap.get(gachaId) || "不明" : "不明",
           actionType: item.action_type as "shipping",
           status: item.status,
           trackingNumber: item.tracking_number,
@@ -205,10 +226,7 @@ const Inventory = () => {
 
       const { data, error } = await supabase
         .from("inventory_actions")
-        .select(`
-          *,
-          gacha_slots!inner(gacha_id, gacha_masters!inner(title))
-        `)
+        .select("*, slot_id")
         .eq("user_id", user.id)
         .eq("action_type", "shipping")
         .eq("status", "shipped")
@@ -217,12 +235,30 @@ const Inventory = () => {
       if (error) throw error;
       if (!data || data.length === 0) return [];
 
+      // スロットからガチャIDを取得
+      const slotIds = [...new Set(data.map(a => a.slot_id).filter(Boolean))] as string[];
+      const { data: slotsData } = await supabase
+        .from("gacha_slots")
+        .select("id, gacha_id")
+        .in("id", slotIds);
+
+      const slotToGachaMap = new Map(slotsData?.map(s => [s.id, s.gacha_id]) || []);
+
+      // ガチャタイトルを取得
+      const gachaIds = [...new Set(slotsData?.map(s => s.gacha_id).filter(Boolean) || [])];
+      const { data: gachasData } = await supabase
+        .from("gacha_masters")
+        .select("id, title")
+        .in("id", gachaIds);
+
+      const gachaMap = new Map(gachasData?.map(g => [g.id, g.title]) || []);
+
       // カード情報をcards_publicビューから取得
-      const cardIds = [...new Set(data.map(a => a.card_id).filter(Boolean))];
+      const cardIds = [...new Set(data.map(a => a.card_id).filter(Boolean))] as string[];
       const { data: cardsData, error: cardsError } = await supabase
         .from("cards_public")
         .select("id, name, image_url, prize_tier, conversion_points")
-        .in("id", cardIds as string[]);
+        .in("id", cardIds);
 
       if (cardsError) throw cardsError;
 
@@ -230,6 +266,7 @@ const Inventory = () => {
 
       return data.map(item => {
         const card = cardsMap.get(item.card_id);
+        const gachaId = slotToGachaMap.get(item.slot_id);
         return {
           id: item.id,
           slotId: item.slot_id || "",
@@ -238,7 +275,7 @@ const Inventory = () => {
           cardImageUrl: card?.image_url || null,
           prizeTier: card?.prize_tier || "miss",
           conversionPoints: card?.conversion_points || 0,
-          gachaTitle: (item.gacha_slots as any)?.gacha_masters?.title || "不明",
+          gachaTitle: gachaId ? gachaMap.get(gachaId) || "不明" : "不明",
           actionType: item.action_type as "shipping",
           status: item.status,
           trackingNumber: item.tracking_number,
