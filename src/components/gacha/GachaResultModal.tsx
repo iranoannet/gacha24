@@ -52,7 +52,7 @@ const prizeTierStyles: Record<string, { bg: string; text: string; glow: string; 
     bg: "bg-gradient-to-br from-gray-400 to-gray-600", 
     text: "text-white", 
     glow: "",
-    label: "ハズレ",
+    label: "C賞",
     color: "from-gray-400 to-gray-600"
   },
 };

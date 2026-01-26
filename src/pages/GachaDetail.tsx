@@ -120,7 +120,7 @@ const GachaDetail = () => {
   const [showResult, setShowResult] = useState(false);
   const [gachaResult, setGachaResult] = useState<GachaResult | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [pendingPlayCount, setPendingPlayCount] = useState<1 | 10 | 100>(1);
+  const [pendingPlayCount, setPendingPlayCount] = useState<number>(1);
   
   // 演出パラメータ
   const [animParams, setAnimParams] = useState<{
@@ -213,7 +213,7 @@ const GachaDetail = () => {
   const isLoading = isLoadingGacha || isLoadingCards;
 
   // 確認ダイアログを表示
-  const handlePlayRequest = (count: 1 | 10 | 100) => {
+  const handlePlayRequest = (count: number) => {
     if (!user) {
       toast.error("ログインが必要です");
       navigate("/auth");
@@ -229,6 +229,12 @@ const GachaDetail = () => {
 
     setPendingPlayCount(count);
     setShowConfirm(true);
+  };
+
+  // 最後まで引く
+  const handlePlayAll = () => {
+    if (!gacha) return;
+    handlePlayRequest(gacha.remaining_slots);
   };
 
   // 実際にガチャを回す
@@ -514,7 +520,7 @@ const GachaDetail = () => {
                       </span>
                     </div>
                     <motion.div
-                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "miss").length === 1 ? "grid-cols-1 max-w-[100px] mx-auto" : groupedCards.filter(c => c.prizeTier === "miss").length <= 3 ? "grid-cols-3 max-w-[340px] mx-auto" : "grid-cols-4"}`}
+                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "miss").length === 1 ? "grid-cols-1 max-w-[200px] mx-auto" : groupedCards.filter(c => c.prizeTier === "miss").length <= 2 ? "grid-cols-2 max-w-[420px] mx-auto" : "grid-cols-2"}`}
                       initial="hidden"
                       animate="visible"
                       variants={{
@@ -582,35 +588,45 @@ const GachaDetail = () => {
               </span>
             </div>
             
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <Button
-                className="btn-gacha h-12 text-sm font-bold"
+                className="btn-gacha h-12 text-xs font-bold"
                 onClick={() => handlePlayRequest(1)}
                 disabled={isPlaying || gacha.remaining_slots < 1}
               >
                 <div className="flex flex-col items-center">
-                  <span>1回ガチャ</span>
-                  <span className="text-xs opacity-80">{gacha.price_per_play.toLocaleString()}コイン</span>
+                  <span>1回</span>
+                  <span className="text-[10px] opacity-80">{gacha.price_per_play.toLocaleString()}pt</span>
                 </div>
               </Button>
               <Button
-                className="h-12 text-sm font-bold bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white"
+                className="h-12 text-xs font-bold bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white"
                 onClick={() => handlePlayRequest(10)}
                 disabled={isPlaying || gacha.remaining_slots < 10}
               >
                 <div className="flex flex-col items-center">
-                  <span>10連ガチャ</span>
-                  <span className="text-xs opacity-80">{(gacha.price_per_play * 10).toLocaleString()}コイン</span>
+                  <span>10連</span>
+                  <span className="text-[10px] opacity-80">{(gacha.price_per_play * 10).toLocaleString()}pt</span>
                 </div>
               </Button>
               <Button
-                className="h-12 text-sm font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+                className="h-12 text-xs font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
                 onClick={() => handlePlayRequest(100)}
                 disabled={isPlaying || gacha.remaining_slots < 100}
               >
                 <div className="flex flex-col items-center">
-                  <span>100連ガチャ</span>
-                  <span className="text-xs opacity-80">{(gacha.price_per_play * 100).toLocaleString()}コイン</span>
+                  <span>100連</span>
+                  <span className="text-[10px] opacity-80">{(gacha.price_per_play * 100).toLocaleString()}pt</span>
+                </div>
+              </Button>
+              <Button
+                className="h-12 text-xs font-bold bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white animate-pulse"
+                onClick={handlePlayAll}
+                disabled={isPlaying || gacha.remaining_slots < 1}
+              >
+                <div className="flex flex-col items-center">
+                  <span>最後まで</span>
+                  <span className="text-[10px] opacity-80">{gacha.remaining_slots}回</span>
                 </div>
               </Button>
             </div>
@@ -623,7 +639,7 @@ const GachaDetail = () => {
         isOpen={showConfirm}
         onConfirm={handleConfirmPlay}
         onCancel={handleCancelConfirm}
-        playCount={pendingPlayCount}
+        playCount={pendingPlayCount as 1 | 10 | 100}
         pricePerPlay={gacha?.price_per_play || 0}
         currentBalance={userBalance}
         gachaTitle={gacha?.title || ""}
