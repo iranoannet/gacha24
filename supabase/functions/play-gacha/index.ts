@@ -7,7 +7,7 @@ const corsHeaders = {
 
 interface PlayGachaRequest {
   gachaId: string;
-  playCount: 1 | 10 | 100;
+  playCount: number;
 }
 
 interface DrawnCard {
@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     // リクエストボディ
     const { gachaId, playCount } = (await req.json()) as PlayGachaRequest;
 
-    if (!gachaId || ![1, 10, 100].includes(playCount)) {
+    if (!gachaId || typeof playCount !== 'number' || playCount < 1 || playCount > 10000) {
       return new Response(
         JSON.stringify({ error: "無効なリクエストです" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
