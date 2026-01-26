@@ -19,6 +19,15 @@ interface DrawnCard {
   conversionPoints: number;
 }
 
+interface AtomicGachaResult {
+  success: boolean;
+  error?: string;
+  transactionId?: string;
+  totalCost?: number;
+  newBalance?: number;
+  drawnCards?: DrawnCard[];
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -60,188 +69,50 @@ Deno.serve(async (req) => {
       );
     }
 
-    // サービスロールで操作
+    // サービスロールで原子的なデータベース関数を呼び出す
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // ガチャ情報を取得
-    const { data: gacha, error: gachaError } = await supabase
-      .from("gacha_masters")
-      .select("*")
-      .eq("id", gachaId)
-      .single();
+    console.log(`[play-gacha] User ${user.id} attempting ${playCount}x play on gacha ${gachaId}`);
 
-    if (gachaError || !gacha) {
-      return new Response(
-        JSON.stringify({ error: "ガチャが見つかりません" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (gacha.status !== "active") {
-      return new Response(
-        JSON.stringify({ error: "このガチャは現在利用できません" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 残りスロット確認
-    if (gacha.remaining_slots < playCount) {
-      return new Response(
-        JSON.stringify({ error: `残り口数が足りません（残り: ${gacha.remaining_slots}口）` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ユーザーのポイント残高を確認
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("points_balance")
-      .eq("user_id", user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return new Response(
-        JSON.stringify({ error: "プロフィールが見つかりません" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const totalCost = gacha.price_per_play * playCount;
-    if (profile.points_balance < totalCost) {
-      return new Response(
-        JSON.stringify({ error: `ポイントが足りません（必要: ${totalCost}pt, 残高: ${profile.points_balance}pt）` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 未抽選スロットをランダムに取得
-    const { data: availableSlots, error: slotsError } = await supabase
-      .from("gacha_slots")
-      .select("id, card_id")
-      .eq("gacha_id", gachaId)
-      .eq("is_drawn", false)
-      .limit(playCount);
-
-    if (slotsError || !availableSlots || availableSlots.length < playCount) {
-      return new Response(
-        JSON.stringify({ error: "利用可能なスロットがありません" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ランダムにシャッフル
-    const shuffledSlots = availableSlots.sort(() => Math.random() - 0.5).slice(0, playCount);
-    const slotIds = shuffledSlots.map((s) => s.id);
-    const cardIds = shuffledSlots.map((s) => s.card_id).filter(Boolean);
-
-    // カード情報を取得
-    const { data: cards, error: cardsError } = await supabase
-      .from("cards")
-      .select("id, name, image_url, prize_tier, conversion_points")
-      .in("id", cardIds);
-
-    if (cardsError) {
-      console.error("Cards fetch error:", cardsError);
-      return new Response(
-        JSON.stringify({ error: "カード情報の取得に失敗しました" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const cardsMap = new Map(cards?.map((c) => [c.id, c]) || []);
-
-    // トランザクション作成
-    const { data: transaction, error: transactionError } = await supabase
-      .from("user_transactions")
-      .insert({
-        user_id: user.id,
-        gacha_id: gachaId,
-        play_count: playCount,
-        total_spent_points: totalCost,
-        status: "completed",
-        result_items: slotIds,
-      })
-      .select()
-      .single();
-
-    if (transactionError) {
-      console.error("Transaction error:", transactionError);
-      return new Response(
-        JSON.stringify({ error: "トランザクションの作成に失敗しました" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // スロットを更新
-    const { error: updateSlotsError } = await supabase
-      .from("gacha_slots")
-      .update({
-        is_drawn: true,
-        user_id: user.id,
-        drawn_at: new Date().toISOString(),
-        transaction_id: transaction.id,
-      })
-      .in("id", slotIds);
-
-    if (updateSlotsError) {
-      console.error("Update slots error:", updateSlotsError);
-      return new Response(
-        JSON.stringify({ error: "スロットの更新に失敗しました" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ポイント減算
-    const { error: pointsError } = await supabase
-      .from("profiles")
-      .update({ points_balance: profile.points_balance - totalCost })
-      .eq("user_id", user.id);
-
-    if (pointsError) {
-      console.error("Points update error:", pointsError);
-      return new Response(
-        JSON.stringify({ error: "ポイントの更新に失敗しました" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ガチャの残り口数を更新
-    const { error: gachaUpdateError } = await supabase
-      .from("gacha_masters")
-      .update({ remaining_slots: gacha.remaining_slots - playCount })
-      .eq("id", gachaId);
-
-    if (gachaUpdateError) {
-      console.error("Gacha update error:", gachaUpdateError);
-    }
-
-    // 結果を整形
-    const drawnCards: DrawnCard[] = shuffledSlots.map((slot) => {
-      const card = cardsMap.get(slot.card_id);
-      return {
-        slotId: slot.id,
-        cardId: slot.card_id || "",
-        name: card?.name || "不明なカード",
-        imageUrl: card?.image_url || null,
-        prizeTier: card?.prize_tier || "miss",
-        conversionPoints: card?.conversion_points || 0,
-      };
+    // 原子的なガチャ処理を実行
+    const { data: result, error: rpcError } = await supabase.rpc('play_gacha_atomic', {
+      p_user_id: user.id,
+      p_gacha_id: gachaId,
+      p_play_count: playCount,
     });
 
-    console.log(`User ${user.id} played gacha ${gachaId} x${playCount}, got ${drawnCards.length} cards`);
+    if (rpcError) {
+      console.error("[play-gacha] RPC error:", rpcError);
+      return new Response(
+        JSON.stringify({ error: "ガチャ処理中にエラーが発生しました" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const atomicResult = result as AtomicGachaResult;
+
+    if (!atomicResult.success) {
+      console.log(`[play-gacha] Failed: ${atomicResult.error}`);
+      return new Response(
+        JSON.stringify({ error: atomicResult.error }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`[play-gacha] Success: User ${user.id} drew ${atomicResult.drawnCards?.length} cards`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        transactionId: transaction.id,
-        drawnCards,
-        totalCost,
-        newBalance: profile.points_balance - totalCost,
+        transactionId: atomicResult.transactionId,
+        drawnCards: atomicResult.drawnCards,
+        totalCost: atomicResult.totalCost,
+        newBalance: atomicResult.newBalance,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    console.error("Error:", error);
+    console.error("[play-gacha] Error:", error);
     const message = error instanceof Error ? error.message : "内部エラーが発生しました";
     return new Response(
       JSON.stringify({ error: message }),
