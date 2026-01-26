@@ -19,6 +19,7 @@ interface CardPackAnimationProps {
   onSkip?: () => void;
   drawnCards: DrawnCard[];
   playCount: number;
+  fakeSChance?: number; // フェイク演出確率（0-100）
 }
 
 // 7色レインボー
@@ -76,6 +77,7 @@ export function CardPackAnimation({
   onSkip,
   drawnCards,
   playCount,
+  fakeSChance = 15,
 }: CardPackAnimationProps) {
   const [phase, setPhase] = useState<"pack" | "tearing" | "reveal" | "explosion" | "cards">("pack");
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -98,11 +100,11 @@ export function CardPackAnimation({
   // フェイク演出判定
   useEffect(() => {
     if (isPlaying && highestTier === "miss") {
-      setIsFakeOut(Math.random() < FAKE_S_TIER_CHANCE);
+      setIsFakeOut(Math.random() * 100 < fakeSChance);
     } else {
       setIsFakeOut(false);
     }
-  }, [isPlaying, highestTier]);
+  }, [isPlaying, highestTier, fakeSChance]);
 
   // レインボーサイクル
   useEffect(() => {

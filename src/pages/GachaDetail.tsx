@@ -122,6 +122,7 @@ const GachaDetail = () => {
   const [gachaResult, setGachaResult] = useState<GachaResult | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingPlayCount, setPendingPlayCount] = useState<number>(1);
+  const [pendingDrawnCards, setPendingDrawnCards] = useState<DrawnCard[]>([]); // B演出用
   
   // 演出パラメータ
   const [animParams, setAnimParams] = useState<{
@@ -274,6 +275,9 @@ const GachaDetail = () => {
       const highestTier = getHighestPrizeTier(data.drawnCards);
       const params = getAnimationParamsForPrizeTier(highestTier, count);
       setAnimParams(params);
+
+      // B演出用にカードデータをstateにセット
+      setPendingDrawnCards(data.drawnCards);
 
       // 結果をRefに保持（演出完了後に表示）
       pendingResultRef.current = {
@@ -652,8 +656,9 @@ const GachaDetail = () => {
           isPlaying={isPlaying}
           onComplete={handleAnimationComplete}
           onSkip={handleAnimationComplete}
-          drawnCards={pendingResultRef.current?.drawnCards || []}
+          drawnCards={pendingDrawnCards}
           playCount={pendingPlayCount}
+          fakeSChance={(gacha as any).fake_s_tier_chance ?? 15}
         />
       ) : (
         <GachaAnimationSystem

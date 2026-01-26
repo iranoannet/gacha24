@@ -91,6 +91,7 @@ export type Database = {
           banner_url: string | null
           category: Database["public"]["Enums"]["card_category"] | null
           created_at: string
+          fake_s_tier_chance: number
           id: string
           notice_text: string | null
           pop_image_url: string | null
@@ -106,6 +107,7 @@ export type Database = {
           banner_url?: string | null
           category?: Database["public"]["Enums"]["card_category"] | null
           created_at?: string
+          fake_s_tier_chance?: number
           id?: string
           notice_text?: string | null
           pop_image_url?: string | null
@@ -121,6 +123,7 @@ export type Database = {
           banner_url?: string | null
           category?: Database["public"]["Enums"]["card_category"] | null
           created_at?: string
+          fake_s_tier_chance?: number
           id?: string
           notice_text?: string | null
           pop_image_url?: string | null
