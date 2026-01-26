@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ActionConfirmDialog } from "./ActionConfirmDialog";
 
 interface DrawnCard {
   slotId: string;
@@ -66,6 +67,8 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
   const [step, setStep] = useState<"reveal" | "select">("reveal");
   const [selections, setSelections] = useState<Map<string, ActionType>>(new Map());
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"shipping" | "conversion" | null>(null);
 
   // 全カードが選択対象（ハズレも含む）
   const actionableCards = drawnCards;
@@ -229,9 +232,35 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
       toast.info("アイテムを選択してください");
       return;
     }
+    
+    // 選択されたアクションの種類を判定
+    const hasShipping = summary.shipping > 0;
+    const hasConversion = summary.conversion > 0;
+    
+    // 両方ある場合は順番に確認
+    if (hasShipping && hasConversion) {
+      // まず発送を確認
+      setPendingAction("shipping");
+      setShowConfirmDialog(true);
+    } else if (hasShipping) {
+      setPendingAction("shipping");
+      setShowConfirmDialog(true);
+    } else if (hasConversion) {
+      setPendingAction("conversion");
+      setShowConfirmDialog(true);
+    }
+  };
+
+  const handleConfirmAction = async () => {
+    setShowConfirmDialog(false);
     setIsProcessing(true);
     await processActionsMutation.mutateAsync();
     setIsProcessing(false);
+  };
+
+  const handleCancelConfirm = () => {
+    setShowConfirmDialog(false);
+    setPendingAction(null);
   };
 
   const handleSkipSelection = () => {
@@ -545,6 +574,17 @@ export function GachaResultModal({ isOpen, onClose, drawnCards, totalCost, newBa
             </motion.div>
           )}
         </motion.div>
+
+        {/* Confirm Dialog */}
+        <ActionConfirmDialog
+          isOpen={showConfirmDialog}
+          onConfirm={handleConfirmAction}
+          onCancel={handleCancelConfirm}
+          actionType={pendingAction || "shipping"}
+          itemCount={pendingAction === "shipping" ? summary.shipping : summary.conversion}
+          totalPoints={summary.conversionPoints}
+          isProcessing={isProcessing}
+        />
       </motion.div>
     </AnimatePresence>
   );

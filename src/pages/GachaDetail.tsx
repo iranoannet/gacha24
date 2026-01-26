@@ -633,6 +633,7 @@ const GachaDetail = () => {
       <GachaAnimationSystem
         isPlaying={isPlaying}
         onComplete={handleAnimationComplete}
+        onSkip={handleAnimationComplete}
         colorTheme={animParams.colorTheme}
         intensity={animParams.intensity}
         cameraMotion={animParams.cameraMotion}
