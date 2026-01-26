@@ -74,34 +74,59 @@ const MyPage = () => {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl bg-gradient-to-r from-primary to-gold-dark p-4 mb-6"
+          className="mb-6"
         >
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-full bg-card/20 flex items-center justify-center">
-              <span className="text-2xl">🥉</span>
+          {/* Rank Banner */}
+          <div className="rounded-t-2xl bg-gradient-to-r from-primary via-primary to-gold-dark p-5 relative overflow-hidden">
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30 shadow-lg">
+                <span className="text-3xl">🏅</span>
+              </div>
+              <div>
+                <p className="text-xs text-primary-foreground/80 font-medium">現在のランク</p>
+                <p className="text-2xl font-black text-primary-foreground tracking-wide">BEGINNER</p>
+                <p className="text-xs text-primary-foreground/70">コイン還元率0.0%</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-primary-foreground/80">現在のランク</p>
-              <p className="text-lg font-black text-primary-foreground">BEGINNER</p>
-              <p className="text-xs text-primary-foreground/80">ランク特典対象外</p>
-            </div>
-            <ChevronRight className="h-5 w-5 text-primary-foreground ml-auto" />
           </div>
+          
+          {/* Rank Points Progress */}
+          <Card className="rounded-t-none rounded-b-2xl border-t-0">
+            <div className="p-4">
+              <p className="text-sm font-bold text-foreground mb-3">ランクポイント</p>
+              <div className="w-full bg-muted rounded-full h-2 mb-2">
+                <div className="bg-primary h-2 rounded-full" style={{ width: '0%' }}></div>
+              </div>
+              <p className="text-right text-xs text-muted-foreground">
+                次のランクまで <span className="text-lg font-bold text-foreground">100,000</span> pt
+              </p>
+            </div>
+          </Card>
         </motion.div>
 
-        {/* Jackpot Section */}
+        {/* Rank Info Section */}
         <Card className="p-4 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-foreground">ジャックポット</h2>
-            <Button variant="link" className="text-primary text-sm p-0 h-auto">
-              ポイントウリの仕組み
-            </Button>
+          <div className="space-y-4 text-sm">
+            <div>
+              <h3 className="font-bold text-foreground mb-2">■ ランクについて</h3>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                コイン購入時の還元率アップ、ランクアップ時のコインプレゼント、ランク限定オリパなど、さまざまな特典が受けられるランクシステムです。
+                ステージは7段階で、累計のランクポイントによって決まります。
+              </p>
+            </div>
+            <div>
+              <h3 className="font-bold text-foreground mb-2">■ ランクポイントについて</h3>
+              <p className="text-muted-foreground text-xs">
+                1コインの購入で、ランクポイントを1pt獲得できます。
+              </p>
+            </div>
+            <div>
+              <h3 className="font-bold text-foreground mb-2">■ ランクアップ条件</h3>
+              <p className="text-muted-foreground text-xs">
+                ランクごとに設定されたランクポイントを達成することで、次のランクに昇格します。
+              </p>
+            </div>
           </div>
-          <ul className="text-xs text-muted-foreground space-y-2">
-            <li>• 現金（1口＝6回）にガチャ1回を0.01で計上される。損害のあるポイントをポイント（上下10,000円/月）に変換</li>
-            <li>• ポイント獲得率はランクに比例、最大1.2%以上が付与されます</li>
-            <li>• ジャックポット利用確定の後、自動的にポイントに変換されます</li>
-          </ul>
         </Card>
 
         {/* Referral Code */}
