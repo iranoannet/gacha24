@@ -74,12 +74,19 @@ const Inventory = () => {
     userProfile?.last_name && userProfile?.first_name && userProfile?.phone_number;
 
   // ユーザーの当選スロット（inventory_actionに登録されていないもの = 未選択）を取得
-  const { data: unselectedItems, isLoading: isLoadingUnselected } = useQuery({
+  const { data: unselectedItems, isLoading: isLoadingUnselected, error: unselectedError } = useQuery({
     queryKey: ["inventory-unselected", user?.id],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user) {
+        console.log("[Inventory] No user, returning empty");
+        return [];
+      }
 
-      console.log("[Inventory] Fetching slots for user:", user.id);
+      console.log("[Inventory] ====== START FETCH ======");
+      console.log("[Inventory] User ID:", user.id);
+      console.log("[Inventory] User Email:", user.email);
+      console.log("[Inventory] User Agent:", navigator.userAgent);
+      console.log("[Inventory] Is Mobile:", /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
 
       // 当選したスロットを取得（JOINを使わずシンプルに）
       const { data: slots, error: slotsError } = await supabase
@@ -88,9 +95,15 @@ const Inventory = () => {
         .eq("user_id", user.id)
         .eq("is_drawn", true);
 
-      console.log("[Inventory] Slots result:", { slots, slotsError, count: slots?.length });
+      console.log("[Inventory] Slots query result:");
+      console.log("[Inventory] - Error:", slotsError);
+      console.log("[Inventory] - Count:", slots?.length ?? 0);
+      console.log("[Inventory] - Data:", JSON.stringify(slots?.slice(0, 3)));
 
-      if (slotsError) throw slotsError;
+      if (slotsError) {
+        console.error("[Inventory] Slots error:", slotsError);
+        throw slotsError;
+      }
       if (!slots || slots.length === 0) return [];
 
       // すでにアクション登録済みのスロットIDを取得
