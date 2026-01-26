@@ -82,11 +82,13 @@ const PrizeCard = ({ card, compact = false }: { card: GroupedCard; compact?: boo
       </div>
       
       {card.imageUrl ? (
-        <img
-          src={card.imageUrl}
-          alt={card.name}
-          className="w-full aspect-[3/4] object-cover"
-        />
+        <div className="w-full aspect-[3/4] bg-white flex items-center justify-center">
+          <img
+            src={card.imageUrl}
+            alt={card.name}
+            className="w-full h-full object-contain"
+          />
+        </div>
       ) : (
         <div className="w-full aspect-[3/4] bg-muted flex items-center justify-center p-1">
           <span className={`text-muted-foreground text-center line-clamp-3 ${compact ? "text-[8px]" : "text-xs"}`}>
