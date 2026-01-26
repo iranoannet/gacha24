@@ -6,7 +6,7 @@ interface GachaConfirmDialogProps {
   isOpen: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-  playCount: 1 | 10 | 100;
+  playCount: number;
   pricePerPlay: number;
   currentBalance: number;
   gachaTitle: string;
