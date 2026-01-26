@@ -84,6 +84,7 @@ export default function GachaManagement() {
     status: "draft" as GachaStatus,
     category: null as CardCategory | null,
     notice_text: defaultNotice,
+    animation_type: "A" as "A" | "B", // A = スロット風, B = カードパック開封風
   });
 
   // ガチャ一覧
@@ -244,6 +245,7 @@ export default function GachaManagement() {
       status: "draft",
       category: null,
       notice_text: defaultNotice,
+      animation_type: "A",
     });
     setSelectedItems([]);
     setBannerFile(null);
@@ -397,6 +399,7 @@ export default function GachaManagement() {
         status: "draft",
         category: (gacha as any).category || null,
         notice_text: (gacha as any).notice_text || defaultNotice,
+        animation_type: (gacha as any).animation_type || "A",
       });
       setSelectedCategory((gacha as any).category || null);
       setSelectedItems(copiedItems);
@@ -424,6 +427,7 @@ export default function GachaManagement() {
       status: gacha.status,
       category: (gacha as any).category || null,
       notice_text: (gacha as any).notice_text || defaultNotice,
+      animation_type: (gacha as any).animation_type || "A",
     });
     setBannerFile(null);
     setBannerPreview(gacha.banner_url || null);
@@ -749,6 +753,28 @@ export default function GachaManagement() {
                       </Button>
                     )}
                   </div>
+                  
+                  {/* 演出タイプ選択 */}
+                  <div>
+                    <Label>演出タイプ</Label>
+                    <Select
+                      value={formData.animation_type}
+                      onValueChange={(value: "A" | "B") => setFormData({ ...formData, animation_type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A">A演出（スロットマシン風）</SelectItem>
+                        <SelectItem value="B">B演出（カードパック開封風）</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formData.animation_type === "A" 
+                        ? "従来のスロットマシン風の演出です" 
+                        : "カードパックが破れて中からカードが飛び出す演出です"}
+                    </p>
+                  </div>
                 </div>
 
                 {/* 商品ごとの枚数・賞設定 */}
@@ -1022,6 +1048,28 @@ export default function GachaManagement() {
                     画像をアップロード
                   </Button>
                 )}
+              </div>
+              
+              {/* 演出タイプ選択 */}
+              <div>
+                <Label>演出タイプ</Label>
+                <Select
+                  value={formData.animation_type}
+                  onValueChange={(value: "A" | "B") => setFormData({ ...formData, animation_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="A">A演出（スロットマシン風）</SelectItem>
+                    <SelectItem value="B">B演出（カードパック開封風）</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.animation_type === "A" 
+                    ? "従来のスロットマシン風の演出です" 
+                    : "カードパックが破れて中からカードが飛び出す演出です"}
+                </p>
               </div>
               <div>
                 <Label htmlFor="edit-status">ステータス</Label>
