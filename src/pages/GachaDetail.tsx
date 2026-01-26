@@ -23,7 +23,7 @@ import {
 import type { Database } from "@/integrations/supabase/types";
 
 type GachaMaster = Database["public"]["Tables"]["gacha_masters"]["Row"];
-type Card = Database["public"]["Tables"]["cards"]["Row"];
+type CardPublic = Database["public"]["Views"]["cards_public"]["Row"];
 type PrizeTier = Database["public"]["Enums"]["prize_tier"];
 
 const prizeTierStyles: Record<PrizeTier, { bg: string; text: string; glow: string; label: string }> = {
@@ -163,7 +163,7 @@ const GachaDetail = () => {
         .eq("gacha_id", id!)
         .order("rarity", { ascending: true });
       if (error) throw error;
-      return data as Card[];
+      return data as CardPublic[];
     },
     enabled: !!id,
   });
@@ -190,11 +190,11 @@ const GachaDetail = () => {
           const key = `${card.name}-${card.prize_tier}`;
           if (!acc[key]) {
             acc[key] = {
-              id: card.id,
-              name: card.name,
+              id: card.id || "",
+              name: card.name || "",
               imageUrl: card.image_url,
-              prizeTier: card.prize_tier,
-              conversionPoints: card.conversion_points,
+              prizeTier: (card.prize_tier || "miss") as PrizeTier,
+              conversionPoints: card.conversion_points || 0,
               quantity: 0,
             };
           }
