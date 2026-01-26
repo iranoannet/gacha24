@@ -316,6 +316,15 @@ export function useGachaSound() {
     osc.stop(now + 0.3);
   }, [getAudioContext]);
 
+  // 全てのサウンドを停止
+  const stopAll = useCallback(() => {
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+      gainNodeRef.current = null;
+    }
+  }, []);
+
   // クリーンアップ
   useEffect(() => {
     return () => {
@@ -335,5 +344,6 @@ export function useGachaSound() {
     playHeartbeat,
     playJackpot,
     playMiss,
-  }), [playSlotSpin, playDrumRoll, playReveal, playCoinSound, playImpact, playHeartbeat, playJackpot, playMiss]);
+    stopAll,
+  }), [playSlotSpin, playDrumRoll, playReveal, playCoinSound, playImpact, playHeartbeat, playJackpot, playMiss, stopAll]);
 }

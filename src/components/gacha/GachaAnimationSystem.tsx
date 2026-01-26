@@ -12,6 +12,7 @@ interface GachaAnimationProps {
   isRainbow?: boolean; // S賞専用レインボー演出
   isPlaying: boolean;
   onComplete: () => void;
+  onSkip?: () => void; // スキップ時のコールバック
   colorTheme: ColorTheme;
   intensity: IntensityLevel;
   cameraMotion: CameraMotion;
@@ -122,6 +123,7 @@ const PHASE = {
 export function GachaAnimationSystem({
   isPlaying,
   onComplete,
+  onSkip,
   colorTheme,
   intensity,
   cameraMotion,
@@ -138,6 +140,16 @@ export function GachaAnimationSystem({
   const settings = intensitySettings[intensity];
   const controls = useAnimation();
   const sound = useGachaSound();
+
+  // スキップハンドラー
+  const handleSkip = () => {
+    sound.stopAll();
+    if (onSkip) {
+      onSkip();
+    } else {
+      onComplete();
+    }
+  };
 
   // レインボー色循環（S賞演出用）
   useEffect(() => {
@@ -812,6 +824,17 @@ export function GachaAnimationSystem({
             )}
           </AnimatePresence>
         </div>
+
+        {/* スキップボタン */}
+        <motion.button
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          onClick={handleSkip}
+          className="absolute bottom-8 right-8 px-6 py-3 bg-foreground/20 hover:bg-foreground/30 backdrop-blur-sm rounded-full text-white font-bold text-sm transition-colors z-50"
+        >
+          スキップ →
+        </motion.button>
 
         {/* フェーズインジケーター（デバッグ用、本番では非表示） */}
         {/* <div className="absolute top-4 left-4 text-white/50 text-xs">
