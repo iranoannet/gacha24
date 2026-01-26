@@ -79,12 +79,16 @@ const Inventory = () => {
     queryFn: async () => {
       if (!user) return [];
 
+      console.log("[Inventory] Fetching slots for user:", user.id);
+
       // 当選したスロットを取得（JOINを使わずシンプルに）
       const { data: slots, error: slotsError } = await supabase
         .from("gacha_slots")
         .select("id, card_id, gacha_id")
         .eq("user_id", user.id)
         .eq("is_drawn", true);
+
+      console.log("[Inventory] Slots result:", { slots, slotsError, count: slots?.length });
 
       if (slotsError) throw slotsError;
       if (!slots || slots.length === 0) return [];
