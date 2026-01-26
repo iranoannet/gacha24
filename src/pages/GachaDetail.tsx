@@ -20,6 +20,7 @@ import {
   type CameraMotion,
   type ParticleStyle,
 } from "@/components/gacha/GachaAnimationSystem";
+import { CardPackAnimation } from "@/components/gacha/CardPackAnimation";
 import type { Database } from "@/integrations/supabase/types";
 
 type GachaMaster = Database["public"]["Tables"]["gacha_masters"]["Row"];
@@ -645,18 +646,28 @@ const GachaDetail = () => {
         gachaTitle={gacha?.title || ""}
       />
 
-      {/* Play Animation - 新演出システム */}
-      <GachaAnimationSystem
-        isPlaying={isPlaying}
-        onComplete={handleAnimationComplete}
-        onSkip={handleAnimationComplete}
-        colorTheme={animParams.colorTheme}
-        intensity={animParams.intensity}
-        cameraMotion={animParams.cameraMotion}
-        particleStyle={animParams.particleStyle}
-        playCount={pendingPlayCount}
-        isRainbow={animParams.isRainbow}
-      />
+      {/* Animation - 演出タイプに応じて切り替え */}
+      {(gacha as any).animation_type === "B" ? (
+        <CardPackAnimation
+          isPlaying={isPlaying}
+          onComplete={handleAnimationComplete}
+          onSkip={handleAnimationComplete}
+          drawnCards={pendingResultRef.current?.drawnCards || []}
+          playCount={pendingPlayCount}
+        />
+      ) : (
+        <GachaAnimationSystem
+          isPlaying={isPlaying}
+          onComplete={handleAnimationComplete}
+          onSkip={handleAnimationComplete}
+          colorTheme={animParams.colorTheme}
+          intensity={animParams.intensity}
+          cameraMotion={animParams.cameraMotion}
+          particleStyle={animParams.particleStyle}
+          playCount={pendingPlayCount}
+          isRainbow={animParams.isRainbow}
+        />
+      )}
 
       {/* Result Modal */}
       <GachaResultModal

@@ -87,6 +87,7 @@ export type Database = {
       }
       gacha_masters: {
         Row: {
+          animation_type: string
           banner_url: string | null
           category: Database["public"]["Enums"]["card_category"] | null
           created_at: string
@@ -101,6 +102,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          animation_type?: string
           banner_url?: string | null
           category?: Database["public"]["Enums"]["card_category"] | null
           created_at?: string
@@ -115,6 +117,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          animation_type?: string
           banner_url?: string | null
           category?: Database["public"]["Enums"]["card_category"] | null
           created_at?: string
