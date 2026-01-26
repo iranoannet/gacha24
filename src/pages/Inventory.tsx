@@ -20,6 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ActionConfirmDialog } from "@/components/gacha/ActionConfirmDialog";
 
 type InventoryAction = Database["public"]["Tables"]["inventory_actions"]["Row"];
 
@@ -95,6 +96,14 @@ const Inventory = () => {
   const navigate = useNavigate();
   const [showAddressDialog, setShowAddressDialog] = useState(false);
   const [isBulkConverting, setIsBulkConverting] = useState(false);
+  
+  // 確認ダイアログ用のstate
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    actionType: "shipping" | "conversion";
+    item?: InventoryItem;
+    isBulk?: boolean;
+  }>({ isOpen: false, actionType: "shipping" });
 
   // ユーザーの住所情報を取得
   const { data: userProfile } = useQuery({
@@ -378,7 +387,32 @@ const Inventory = () => {
       setShowAddressDialog(true);
       return;
     }
-    requestShippingMutation.mutate(item);
+    setConfirmDialog({ isOpen: true, actionType: "shipping", item });
+  };
+
+  // ポイント変換のハンドラ（確認ダイアログ付き）
+  const handleConvertToPoints = (item: InventoryItem) => {
+    setConfirmDialog({ isOpen: true, actionType: "conversion", item });
+  };
+
+  // 一括ポイント変換のハンドラ（確認ダイアログ付き）
+  const handleBulkConvertClick = () => {
+    setConfirmDialog({ isOpen: true, actionType: "conversion", isBulk: true });
+  };
+
+  // 確認ダイアログの確定処理
+  const handleConfirmAction = async () => {
+    if (confirmDialog.isBulk) {
+      setConfirmDialog({ isOpen: false, actionType: "conversion" });
+      await handleBulkConvert();
+    } else if (confirmDialog.item) {
+      if (confirmDialog.actionType === "shipping") {
+        requestShippingMutation.mutate(confirmDialog.item);
+      } else {
+        convertToPointsMutation.mutate(confirmDialog.item);
+      }
+      setConfirmDialog({ isOpen: false, actionType: "shipping" });
+    }
   };
 
   // ポイント変換ミューテーション
@@ -518,7 +552,7 @@ const Inventory = () => {
             size="sm"
             variant="outline"
             className="h-8 text-xs"
-            onClick={() => convertToPointsMutation.mutate(item)}
+            onClick={() => handleConvertToPoints(item)}
             disabled={convertToPointsMutation.isPending}
           >
             <Coins className="h-3 w-3 mr-1" />
@@ -594,7 +628,7 @@ const Inventory = () => {
                       </p>
                     </div>
                     <Button
-                      onClick={handleBulkConvert}
+                      onClick={handleBulkConvertClick}
                       disabled={isBulkConverting}
                       className="bg-gradient-to-r from-primary to-secondary"
                     >
@@ -672,6 +706,27 @@ const Inventory = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* アクション確認ダイアログ */}
+        <ActionConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          onConfirm={handleConfirmAction}
+          onCancel={() => setConfirmDialog({ isOpen: false, actionType: "shipping" })}
+          actionType={confirmDialog.actionType}
+          itemCount={confirmDialog.isBulk ? (unselectedItems?.length || 0) : 1}
+          totalPoints={
+            confirmDialog.isBulk
+              ? totalConversionPoints
+              : confirmDialog.item?.conversionPoints || 0
+          }
+          isProcessing={
+            confirmDialog.actionType === "shipping"
+              ? requestShippingMutation.isPending
+              : confirmDialog.isBulk
+                ? isBulkConverting
+                : convertToPointsMutation.isPending
+          }
+        />
       </div>
     </MainLayout>
   );
