@@ -25,11 +25,18 @@ const Index = () => {
     },
   });
 
-  // カテゴリでフィルタリング
-  const filteredGachaList = gachaList?.filter((gacha) => {
-    if (selectedCategory === "all") return true;
-    return (gacha as any).category === selectedCategory;
-  });
+  // カテゴリでフィルタリング & SOLD OUTを最後尾にソート
+  const filteredGachaList = gachaList
+    ?.filter((gacha) => {
+      if (selectedCategory === "all") return true;
+      return (gacha as any).category === selectedCategory;
+    })
+    ?.sort((a, b) => {
+      // SOLD OUT (remaining_slots === 0) を最後尾に
+      const aIsSoldOut = a.remaining_slots === 0 ? 1 : 0;
+      const bIsSoldOut = b.remaining_slots === 0 ? 1 : 0;
+      return aIsSoldOut - bIsSoldOut;
+    });
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
