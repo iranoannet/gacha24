@@ -62,16 +62,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     console.log("[Auth] Signing out...");
     
-    // Sign out from Supabase with global scope
-    const { error } = await supabase.auth.signOut({ scope: 'global' });
-    if (error) {
-      console.error("[Auth] Sign out error:", error);
-    }
-    
-    // Clear local state
+    // Clear local state first
     setUser(null);
     setSession(null);
     setIsAdmin(false);
+    
+    // Sign out from Supabase (local scope to avoid 403 on expired sessions)
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (error) {
+      console.error("[Auth] Sign out error:", error);
+    }
     
     console.log("[Auth] Sign out complete");
   };
