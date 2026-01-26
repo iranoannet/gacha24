@@ -56,38 +56,45 @@ export function ActionConfirmDialog({
 
           {/* Content */}
           <div className="p-6">
-            <div className="text-center mb-6">
-              {isShipping ? (
-                <>
-                  <p className="text-foreground font-bold text-lg mb-2">
-                    {itemCount}件のアイテムを発送依頼しますか？
+          <div className="text-center mb-6">
+            {isShipping ? (
+              <>
+                <p className="text-foreground font-bold text-lg mb-3">
+                  {itemCount}件のアイテムを発送依頼しますか？
+                </p>
+                <p className="text-muted-foreground text-sm mb-4">
+                  発送依頼後、管理者が順次発送処理を行います。
+                  <br />
+                  発送状況は「インベントリ」から確認できます。
+                </p>
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-700 dark:text-amber-300 text-left">
+                    確定するを押した場合、キャンセル処理ができませんのでご注意ください。
                   </p>
-                  <p className="text-muted-foreground text-sm">
-                    発送依頼後、管理者が順次発送処理を行います。
-                    発送状況は「インベントリ」から確認できます。
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-foreground font-bold text-lg mb-2">
+                  {itemCount}件のアイテムをポイントに変換しますか？
+                </p>
+                <div className="bg-primary/10 rounded-xl p-4 mt-4">
+                  <p className="text-sm text-muted-foreground mb-1">獲得ポイント</p>
+                  <p className="text-3xl font-black text-primary">
+                    +{totalPoints.toLocaleString()}pt
                   </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-foreground font-bold text-lg mb-2">
-                    {itemCount}件のアイテムをポイントに変換しますか？
+                </div>
+                <div className="flex items-center gap-2 mt-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                  <p className="text-xs text-amber-700 dark:text-amber-300 text-left">
+                    ポイント変換後は元に戻せません。
+                    カードは削除され、ポイントが加算されます。
                   </p>
-                  <div className="bg-primary/10 rounded-xl p-4 mt-4">
-                    <p className="text-sm text-muted-foreground mb-1">獲得ポイント</p>
-                    <p className="text-3xl font-black text-primary">
-                      +{totalPoints.toLocaleString()}pt
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 mt-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
-                    <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
-                    <p className="text-xs text-amber-700 dark:text-amber-300 text-left">
-                      ポイント変換後は元に戻せません。
-                      カードは削除され、ポイントが加算されます。
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            )}
+          </div>
 
             {/* Buttons */}
             <div className="flex gap-3">
