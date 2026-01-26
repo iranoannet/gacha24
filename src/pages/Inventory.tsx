@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import MainLayout from "@/components/layout/MainLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Package, Truck, Check, Coins, Loader2, AlertCircle } from "lucide-react";
+import { Package, Truck, Check, Coins, Loader2, AlertCircle, Clock } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +30,48 @@ const prizeTierStyles: Record<string, { bg: string; label: string }> = {
   miss: { bg: "bg-muted", label: "ハズレ" },
 };
 
+// 選択期限表示コンポーネント
+const DeadlineDisplay = ({ deadline }: { deadline: string }) => {
+  const deadlineDate = new Date(deadline);
+  const now = new Date();
+  const diffMs = deadlineDate.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays <= 0) {
+    return (
+      <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+        <Clock className="h-3 w-3" />
+        期限切れ（自動ポイント変換待ち）
+      </p>
+    );
+  }
+  
+  if (diffDays <= 3) {
+    return (
+      <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+        <Clock className="h-3 w-3" />
+        期限まで残り{diffDays}日
+      </p>
+    );
+  }
+  
+  if (diffDays <= 7) {
+    return (
+      <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
+        <Clock className="h-3 w-3" />
+        期限まで残り{diffDays}日
+      </p>
+    );
+  }
+  
+  return (
+    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+      <Clock className="h-3 w-3" />
+      期限: {deadlineDate.toLocaleDateString("ja-JP")}
+    </p>
+  );
+};
+
 interface InventoryItem {
   id: string;
   slotId: string;
@@ -44,6 +86,7 @@ interface InventoryItem {
   trackingNumber: string | null;
   requestedAt: string | null;
   processedAt: string | null;
+  selectionDeadline: string | null;
 }
 
 const Inventory = () => {
@@ -91,7 +134,7 @@ const Inventory = () => {
       // 当選したスロットを取得（JOINを使わずシンプルに）
       const { data: slots, error: slotsError } = await supabase
         .from("gacha_slots")
-        .select("id, card_id, gacha_id")
+        .select("id, card_id, gacha_id, selection_deadline")
         .eq("user_id", user.id)
         .eq("is_drawn", true);
 
@@ -158,6 +201,7 @@ const Inventory = () => {
           trackingNumber: null,
           requestedAt: null,
           processedAt: null,
+          selectionDeadline: (slot as any).selection_deadline || null,
         } as InventoryItem;
       });
 
@@ -444,12 +488,16 @@ const Inventory = () => {
           <p className="text-xs text-primary mt-1">追跡: {item.trackingNumber}</p>
         )}
         {item.status === "pending" && (
-          <p className="text-xs text-orange-500 mt-1">発送準備中</p>
+          <p className="text-xs text-amber-500 mt-1">発送準備中</p>
         )}
         {item.status === "shipped" && item.processedAt && (
-          <p className="text-xs text-green-500 mt-1">
+          <p className="text-xs text-emerald-500 mt-1">
             発送済み ({new Date(item.processedAt).toLocaleDateString("ja-JP")})
           </p>
+        )}
+        {/* 選択期限の表示（未選択アイテムのみ） */}
+        {showActions && item.selectionDeadline && (
+          <DeadlineDisplay deadline={item.selectionDeadline} />
         )}
       </div>
 
