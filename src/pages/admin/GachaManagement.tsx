@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Edit, Trash2, Upload, X, ArrowRight, ArrowLeft, Search, Copy } from "lucide-react";
+import { AnimationPreviewDialog } from "@/components/admin/AnimationPreviewDialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -760,12 +761,18 @@ export default function GachaManagement() {
                   
                   {/* 演出タイプ選択 */}
                   <div>
-                    <Label>演出タイプ</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>演出タイプ</Label>
+                      <AnimationPreviewDialog 
+                        animationType={formData.animation_type}
+                        fakeSChance={formData.fake_s_tier_chance}
+                      />
+                    </div>
                     <Select
                       value={formData.animation_type}
                       onValueChange={(value: "A" | "B") => setFormData({ ...formData, animation_type: value })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="mt-1">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1074,12 +1081,18 @@ export default function GachaManagement() {
               
               {/* 演出タイプ選択 */}
               <div>
-                <Label>演出タイプ</Label>
+                <div className="flex items-center justify-between">
+                  <Label>演出タイプ</Label>
+                  <AnimationPreviewDialog 
+                    animationType={formData.animation_type}
+                    fakeSChance={formData.fake_s_tier_chance}
+                  />
+                </div>
                 <Select
                   value={formData.animation_type}
                   onValueChange={(value: "A" | "B") => setFormData({ ...formData, animation_type: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
