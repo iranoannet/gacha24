@@ -420,7 +420,7 @@ const GachaDetail = () => {
                       </div>
                     </div>
                     <motion.div
-                      className={`grid gap-3 ${groupedCards.filter(c => c.prizeTier === "S").length === 1 ? "grid-cols-1 max-w-[200px] mx-auto" : "grid-cols-2"}`}
+                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "S").length === 1 ? "grid-cols-1 max-w-[120px] mx-auto" : groupedCards.filter(c => c.prizeTier === "S").length === 2 ? "grid-cols-2 max-w-[250px] mx-auto" : "grid-cols-3 sm:grid-cols-4 md:grid-cols-6"}`}
                       initial="hidden"
                       animate="visible"
                       variants={{
@@ -456,7 +456,7 @@ const GachaDetail = () => {
                       </div>
                     </div>
                     <motion.div
-                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "A").length === 1 ? "grid-cols-1 max-w-[200px] mx-auto" : groupedCards.filter(c => c.prizeTier === "A").length === 2 ? "grid-cols-2 max-w-[420px] mx-auto" : "grid-cols-2"}`}
+                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "A").length === 1 ? "grid-cols-1 max-w-[120px] mx-auto" : groupedCards.filter(c => c.prizeTier === "A").length === 2 ? "grid-cols-2 max-w-[250px] mx-auto" : "grid-cols-3 sm:grid-cols-4 md:grid-cols-6"}`}
                       initial="hidden"
                       animate="visible"
                       variants={{
@@ -488,7 +488,7 @@ const GachaDetail = () => {
                       </span>
                     </div>
                     <motion.div
-                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "B").length === 1 ? "grid-cols-1 max-w-[200px] mx-auto" : groupedCards.filter(c => c.prizeTier === "B").length <= 2 ? "grid-cols-2 max-w-[420px] mx-auto" : "grid-cols-2"}`}
+                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "B").length === 1 ? "grid-cols-1 max-w-[120px] mx-auto" : groupedCards.filter(c => c.prizeTier === "B").length === 2 ? "grid-cols-2 max-w-[250px] mx-auto" : "grid-cols-3 sm:grid-cols-4 md:grid-cols-6"}`}
                       initial="hidden"
                       animate="visible"
                       variants={{
@@ -520,7 +520,7 @@ const GachaDetail = () => {
                       </span>
                     </div>
                     <motion.div
-                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "miss").length === 1 ? "grid-cols-1 max-w-[200px] mx-auto" : groupedCards.filter(c => c.prizeTier === "miss").length <= 2 ? "grid-cols-2 max-w-[420px] mx-auto" : "grid-cols-2"}`}
+                      className={`grid gap-2 ${groupedCards.filter(c => c.prizeTier === "miss").length === 1 ? "grid-cols-1 max-w-[120px] mx-auto" : groupedCards.filter(c => c.prizeTier === "miss").length === 2 ? "grid-cols-2 max-w-[250px] mx-auto" : "grid-cols-3 sm:grid-cols-4 md:grid-cols-6"}`}
                       initial="hidden"
                       animate="visible"
                       variants={{
