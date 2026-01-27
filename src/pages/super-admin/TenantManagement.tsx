@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Building2, ExternalLink, Settings } from "lucide-react";
+import { Plus, Pencil, Building2, ExternalLink, Settings, Copy } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,6 +36,10 @@ export default function TenantManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<string | null>(null);
   const [formData, setFormData] = useState<TenantFormData>(initialFormData);
+  const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false);
+  const [copyingTenant, setCopyingTenant] = useState<{ id: string; name: string } | null>(null);
+  const [newTenantName, setNewTenantName] = useState("");
+  const [newTenantSlug, setNewTenantSlug] = useState("");
 
   const { data: tenants, isLoading } = useQuery({
     queryKey: ["super-admin-tenants"],
@@ -82,6 +86,43 @@ export default function TenantManagement() {
     },
   });
 
+  const copyTenantMutation = useMutation({
+    mutationFn: async ({ sourceId, name, slug }: { sourceId: string; name: string; slug: string }) => {
+      // Get source tenant settings
+      const { data: sourceTenant, error: sourceError } = await supabase
+        .from("tenants")
+        .select("*")
+        .eq("id", sourceId)
+        .single();
+      
+      if (sourceError) throw sourceError;
+      
+      // Create new tenant with same settings but different name/slug
+      // Data (cards, gachas, users, etc.) will NOT be copied - only settings
+      const { error: createError } = await supabase.from("tenants").insert({
+        name,
+        slug,
+        logo_url: sourceTenant.logo_url,
+        primary_color: sourceTenant.primary_color,
+        custom_domain: "", // Reset custom domain for new tenant
+        is_active: true,
+      });
+      
+      if (createError) throw createError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-tenants"] });
+      toast.success("テナントをコピーしました（設定のみ、データなし）");
+      setIsCopyDialogOpen(false);
+      setCopyingTenant(null);
+      setNewTenantName("");
+      setNewTenantSlug("");
+    },
+    onError: (error: Error) => {
+      toast.error(`コピーエラー: ${error.message}`);
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingTenant) {
@@ -108,6 +149,24 @@ export default function TenantManagement() {
     setEditingTenant(null);
     setFormData(initialFormData);
     setIsDialogOpen(true);
+  };
+
+  const handleCopyTenant = (tenant: { id: string; name: string }) => {
+    setCopyingTenant(tenant);
+    setNewTenantName(tenant.name + "（コピー）");
+    setNewTenantSlug("");
+    setIsCopyDialogOpen(true);
+  };
+
+  const handleCopySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!copyingTenant || !newTenantName || !newTenantSlug) return;
+    
+    copyTenantMutation.mutate({
+      sourceId: copyingTenant.id,
+      name: newTenantName,
+      slug: newTenantSlug,
+    });
   };
 
   return (
@@ -275,6 +334,14 @@ export default function TenantManagement() {
                           <Button variant="ghost" size="sm" onClick={() => handleEdit(tenant)} title="編集">
                             <Pencil className="w-4 h-4" />
                           </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleCopyTenant({ id: tenant.id, name: tenant.name })} 
+                            title="テナントをコピー"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -286,6 +353,70 @@ export default function TenantManagement() {
             )}
           </CardContent>
         </Card>
+
+        {/* Copy Tenant Dialog */}
+        <Dialog open={isCopyDialogOpen} onOpenChange={setIsCopyDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>テナントをコピー</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCopySubmit} className="space-y-4">
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  <strong>注意:</strong> テナント設定（ブランドカラー、ロゴ等）のみがコピーされます。
+                  ユーザー、ガチャ、カード、取引履歴などのデータはコピーされません。
+                </p>
+              </div>
+              
+              {copyingTenant && (
+                <p className="text-sm text-muted-foreground">
+                  コピー元: <strong>{copyingTenant.name}</strong>
+                </p>
+              )}
+              
+              <div className="space-y-2">
+                <Label htmlFor="copy-name">新しい会社名</Label>
+                <Input
+                  id="copy-name"
+                  value={newTenantName}
+                  onChange={(e) => setNewTenantName(e.target.value)}
+                  placeholder="株式会社〇〇"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="copy-slug">新しいスラッグ（URL用）</Label>
+                <Input
+                  id="copy-slug"
+                  value={newTenantSlug}
+                  onChange={(e) => setNewTenantSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="new-company"
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  URLパス: /{newTenantSlug || "example"}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => setIsCopyDialogOpen(false)}
+                >
+                  キャンセル
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="flex-1" 
+                  disabled={copyTenantMutation.isPending || !newTenantSlug}
+                >
+                  {copyTenantMutation.isPending ? "コピー中..." : "コピー作成"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </SuperAdminLayout>
   );
