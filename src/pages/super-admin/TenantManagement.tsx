@@ -17,6 +17,7 @@ interface TenantFormData {
   slug: string;
   logo_url: string;
   primary_color: string;
+  custom_domain: string;
   is_active: boolean;
 }
 
@@ -25,6 +26,7 @@ const initialFormData: TenantFormData = {
   slug: "",
   logo_url: "",
   primary_color: "#D4AF37",
+  custom_domain: "",
   is_active: true,
 };
 
@@ -95,6 +97,7 @@ export default function TenantManagement() {
       slug: tenant.slug,
       logo_url: tenant.logo_url || "",
       primary_color: tenant.primary_color || "#D4AF37",
+      custom_domain: (tenant as any).custom_domain || "",
       is_active: tenant.is_active,
     });
     setIsDialogOpen(true);
@@ -110,9 +113,14 @@ export default function TenantManagement() {
     <SuperAdminLayout title="テナント管理">
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <p className="text-muted-foreground">
-            登録されているテナント（会社）を管理します
-          </p>
+          <div className="space-y-1">
+            <p className="text-muted-foreground">
+              登録されているテナント（会社）を管理します
+            </p>
+            <p className="text-xs text-muted-foreground">
+              ※ シングルコードベース方式：1つのアプリで全テナントを管理し、データはtenant_idで分離されます
+            </p>
+          </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={handleOpenDialog}>
@@ -173,6 +181,18 @@ export default function TenantManagement() {
                     />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="custom_domain">カスタムドメイン（任意）</Label>
+                  <Input
+                    id="custom_domain"
+                    value={formData.custom_domain}
+                    onChange={(e) => setFormData({ ...formData, custom_domain: e.target.value.toLowerCase().replace(/\s/g, '') })}
+                    placeholder="www.company-gacha.com"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    独自ドメインを設定する場合、DNS設定が必要です
+                  </p>
+                </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="is_active">有効</Label>
                   <Switch
@@ -205,6 +225,7 @@ export default function TenantManagement() {
                   <TableRow>
                     <TableHead>会社名</TableHead>
                     <TableHead>スラッグ</TableHead>
+                    <TableHead>カスタムドメイン</TableHead>
                     <TableHead>ブランドカラー</TableHead>
                     <TableHead>ステータス</TableHead>
                     <TableHead>作成日</TableHead>
@@ -216,6 +237,9 @@ export default function TenantManagement() {
                     <TableRow key={tenant.id}>
                       <TableCell className="font-medium">{tenant.name}</TableCell>
                       <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {(tenant as any).custom_domain || '-'}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div 
