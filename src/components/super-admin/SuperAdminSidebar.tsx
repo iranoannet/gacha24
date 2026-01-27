@@ -1,16 +1,11 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, 
-  Package, 
-  Layers, 
-  Truck, 
-  Users, 
+  Building2,
+  Users,
   BarChart3,
   LogOut,
   Settings,
-  Database,
-  CreditCard,
-  Image,
   Shield
 } from "lucide-react";
 import {
@@ -25,34 +20,27 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
-  { title: "ダッシュボード", url: "/admin", icon: LayoutDashboard },
-  { title: "商品マスタ", url: "/admin/cards", icon: Database },
-  { title: "ガチャ管理", url: "/admin/gachas", icon: Package },
-  { title: "スロット編集", url: "/admin/slots", icon: Layers },
-  { title: "バナー管理", url: "/admin/banners", icon: Image },
-  { title: "配送管理", url: "/admin/shipping", icon: Truck },
-  { title: "決済管理", url: "/admin/payments", icon: CreditCard },
-  { title: "ユーザー管理", url: "/admin/users", icon: Users },
-  { title: "売上分析", url: "/admin/analytics", icon: BarChart3 },
+  { title: "ダッシュボード", url: "/super-admin", icon: LayoutDashboard },
+  { title: "テナント管理", url: "/super-admin/tenants", icon: Building2 },
+  { title: "全ユーザー管理", url: "/super-admin/users", icon: Users },
+  { title: "全体分析", url: "/super-admin/analytics", icon: BarChart3 },
 ];
 
-export function AdminSidebar() {
+export function SuperAdminSidebar() {
   const location = useLocation();
-  const { isSuperAdmin } = useAuth();
 
   return (
     <Sidebar className="border-r border-border">
-      <SidebarHeader className="border-b border-border p-4">
+      <SidebarHeader className="border-b border-border p-4 bg-gradient-to-r from-purple-900/30 to-transparent">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <Package className="w-5 h-5 text-primary-foreground" />
+          <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
+            <Shield className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="font-bold text-sm">管理画面</h2>
-            <p className="text-xs text-muted-foreground">Admin Dashboard</p>
+            <h2 className="font-bold text-sm">スーパー管理</h2>
+            <p className="text-xs text-muted-foreground">Super Admin</p>
           </div>
         </div>
       </SidebarHeader>
@@ -82,29 +70,19 @@ export function AdminSidebar() {
 
       <SidebarFooter className="border-t border-border p-2">
         <SidebarMenu>
-          {isSuperAdmin && (
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild>
-                <NavLink to="/super-admin" className="flex items-center gap-2 text-purple-400 hover:text-purple-300">
-                  <Shield className="w-4 h-4" />
-                  <span>スーパー管理</span>
-                </NavLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <NavLink to="/admin/settings" className="flex items-center gap-2">
+              <NavLink to="/super-admin/settings" className="flex items-center gap-2">
                 <Settings className="w-4 h-4" />
-                <span>設定</span>
+                <span>システム設定</span>
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <NavLink to="/" className="flex items-center gap-2 text-muted-foreground">
+              <NavLink to="/admin" className="flex items-center gap-2 text-muted-foreground">
                 <LogOut className="w-4 h-4" />
-                <span>サイトに戻る</span>
+                <span>通常管理画面へ</span>
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>

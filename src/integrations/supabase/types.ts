@@ -620,6 +620,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_super_admin: { Args: never; Returns: boolean }
       play_gacha_atomic: {
         Args: { p_gacha_id: string; p_play_count: number; p_user_id: string }
         Returns: Json

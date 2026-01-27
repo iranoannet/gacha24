@@ -40,6 +40,13 @@ import UserManagement from "./pages/admin/UserManagement";
 import Analytics from "./pages/admin/Analytics";
 import BannerManagement from "./pages/admin/BannerManagement";
 
+// Super Admin pages
+import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
+import TenantManagement from "./pages/super-admin/TenantManagement";
+import AllUsersManagement from "./pages/super-admin/AllUsersManagement";
+import GlobalAnalytics from "./pages/super-admin/GlobalAnalytics";
+import { SuperAdminProtectedRoute } from "@/components/super-admin/SuperAdminProtectedRoute";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -81,6 +88,12 @@ const App = () => (
             <Route path="/admin/payments" element={<AdminProtectedRoute><PaymentManagement /></AdminProtectedRoute>} />
             <Route path="/admin/users" element={<AdminProtectedRoute><UserManagement /></AdminProtectedRoute>} />
             <Route path="/admin/analytics" element={<AdminProtectedRoute><Analytics /></AdminProtectedRoute>} />
+            
+            {/* Super Admin Routes - Protected */}
+            <Route path="/super-admin" element={<SuperAdminProtectedRoute><SuperAdminDashboard /></SuperAdminProtectedRoute>} />
+            <Route path="/super-admin/tenants" element={<SuperAdminProtectedRoute><TenantManagement /></SuperAdminProtectedRoute>} />
+            <Route path="/super-admin/users" element={<SuperAdminProtectedRoute><AllUsersManagement /></SuperAdminProtectedRoute>} />
+            <Route path="/super-admin/analytics" element={<SuperAdminProtectedRoute><GlobalAnalytics /></SuperAdminProtectedRoute>} />
             
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
