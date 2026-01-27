@@ -72,9 +72,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         const identifier = getTenantIdentifier();
         
         if (!identifier) {
-          // No tenant identifier - use default/null tenant
+          // No tenant identifier - use default/null tenant (this is normal for /admin routes)
           setTenantSlug(null);
           setTenant(null);
+          setError(null); // Clear any error - null tenant is valid for default routes
           setLoading(false);
           return;
         }

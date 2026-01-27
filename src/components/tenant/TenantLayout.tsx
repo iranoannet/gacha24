@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { useTenant } from "@/hooks/useTenant";
 import { Loader2 } from "lucide-react";
+import { useLocation } from "react-router-dom";
 
 interface TenantLayoutProps {
   children: ReactNode;
@@ -10,7 +11,11 @@ interface TenantLayoutProps {
  * Wrapper component that applies tenant-specific branding
  */
 export function TenantLayout({ children }: TenantLayoutProps) {
-  const { tenant, loading, error } = useTenant();
+  const { tenant, loading, error, tenantSlug } = useTenant();
+  const location = useLocation();
+
+  // Check if we're on an admin route - admin routes should work without a tenant
+  const isAdminRoute = location.pathname.includes("/admin");
 
   if (loading) {
     return (
@@ -20,7 +25,9 @@ export function TenantLayout({ children }: TenantLayoutProps) {
     );
   }
 
-  if (error) {
+  // Only show error for non-admin routes when tenant is expected but not found
+  // Admin routes should work even without a tenant context
+  if (error && tenantSlug && !isAdminRoute) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
