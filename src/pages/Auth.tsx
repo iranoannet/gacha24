@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Eye, EyeOff } from "lucide-react";
 import MainLayout from "@/components/layout/MainLayout";
+import { useTenant } from "@/hooks/useTenant";
 
 const authSchema = z.object({
   email: z.string().trim().email("有効なメールアドレスを入力してください").max(255),
@@ -18,6 +19,7 @@ export default function Auth() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const mode = searchParams.get("mode") || "login";
+  const { tenant, tenantSlug } = useTenant();
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,23 +27,27 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
+  // Get the base path for current tenant
+  const basePath = tenantSlug ? `/${tenantSlug}` : "";
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (session?.user) {
-          navigate("/");
+          // Redirect to tenant-specific home if on a tenant path
+          navigate(basePath || "/");
         }
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        navigate("/");
+        navigate(basePath || "/");
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, basePath]);
 
   const validateForm = () => {
     try {
@@ -66,21 +72,60 @@ export default function Auth() {
     if (!validateForm()) return;
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ 
+    
+    const { data, error } = await supabase.auth.signInWithPassword({ 
       email: email.trim(), 
       password 
     });
-    setLoading(false);
-
+    
     if (error) {
+      setLoading(false);
       if (error.message.includes("Invalid login credentials")) {
         toast.error("メールアドレスまたはパスワードが正しくありません");
       } else {
         toast.error("ログインエラー: " + error.message);
       }
-    } else {
-      toast.success("ログインしました");
+      return;
     }
+
+    // Check if user belongs to current tenant
+    if (data.user) {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        setLoading(false);
+        toast.error("プロフィールの取得に失敗しました");
+        await supabase.auth.signOut({ scope: 'local' });
+        return;
+      }
+
+      // Validate tenant membership
+      const userTenantId = profile?.tenant_id;
+      const currentTenantId = tenant?.id || null;
+
+      // If we're on a tenant site and user doesn't belong to this tenant
+      if (currentTenantId && userTenantId !== currentTenantId) {
+        setLoading(false);
+        toast.error("このサイトのアカウントではありません。正しいサイトからログインしてください。");
+        await supabase.auth.signOut({ scope: 'local' });
+        return;
+      }
+
+      // If we're on the default site (no tenant) and user belongs to a specific tenant
+      if (!currentTenantId && userTenantId) {
+        setLoading(false);
+        toast.error("このサイトのアカウントではありません。テナントサイトからログインしてください。");
+        await supabase.auth.signOut({ scope: 'local' });
+        return;
+      }
+    }
+
+    setLoading(false);
+    toast.success("ログインしました");
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -88,11 +133,20 @@ export default function Auth() {
     if (!validateForm()) return;
 
     setLoading(true);
-    const redirectUrl = `${window.location.origin}/`;
+    
+    // Set redirect URL with tenant path
+    const redirectUrl = `${window.location.origin}${basePath}/`;
+    
+    // Include tenant_id in user metadata for the DB trigger to use
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { emailRedirectTo: redirectUrl },
+      options: { 
+        emailRedirectTo: redirectUrl,
+        data: {
+          tenant_id: tenant?.id || null,
+        }
+      },
     });
     setLoading(false);
 
@@ -113,6 +167,13 @@ export default function Auth() {
     <MainLayout hideBottomNav>
       <div className="min-h-[calc(100vh-120px)] flex flex-col bg-background">
         <div className="container px-4 py-8 max-w-md mx-auto flex-1">
+          {/* Show tenant name if on a tenant site */}
+          {tenant && (
+            <div className="text-center mb-4">
+              <span className="text-sm text-muted-foreground">{tenant.name}</span>
+            </div>
+          )}
+          
           <h1 className="text-2xl font-bold text-foreground mb-8">
             {isLogin ? "ログイン" : "アカウント新規作成"}
           </h1>
@@ -186,7 +247,7 @@ export default function Auth() {
                 パスワードをお忘れですか？
               </p>
               <Link
-                to="/auth?mode=signup"
+                to={`${basePath}/auth?mode=signup`}
                 className="block text-sm text-foreground underline underline-offset-4 hover:text-primary transition-colors"
               >
                 アカウント新規作成
@@ -197,7 +258,7 @@ export default function Auth() {
           {!isLogin && (
             <div className="mt-6 text-center">
               <Link
-                to="/auth?mode=login"
+                to={`${basePath}/auth?mode=login`}
                 className="text-sm text-foreground underline underline-offset-4 hover:text-primary transition-colors"
               >
                 既にアカウントをお持ちの方はこちら
