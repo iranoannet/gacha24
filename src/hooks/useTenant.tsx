@@ -48,8 +48,8 @@ function getTenantIdentifier(): { type: "path" | "domain" | "subdomain"; value: 
     }
   }
 
-  // Check for custom domain (not lovable.app or localhost)
-  if (!hostname.includes("lovable.app") && !hostname.includes("localhost")) {
+  // Check for custom domain (not lovable.app, lovableproject.com or localhost)
+  if (!hostname.includes("lovable.app") && !hostname.includes("lovableproject.com") && !hostname.includes("localhost")) {
     return { type: "domain", value: hostname };
   }
 
