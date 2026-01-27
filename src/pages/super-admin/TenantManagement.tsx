@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Building2 } from "lucide-react";
+import { Plus, Pencil, Building2, ExternalLink, Settings } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -236,7 +237,9 @@ export default function TenantManagement() {
                   {tenants.map((tenant) => (
                     <TableRow key={tenant.id}>
                       <TableCell className="font-medium">{tenant.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
+                      <TableCell>
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">/{tenant.slug}</code>
+                      </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {(tenant as any).custom_domain || '-'}
                       </TableCell>
@@ -258,9 +261,21 @@ export default function TenantManagement() {
                         {new Date(tenant.created_at).toLocaleDateString('ja-JP')}
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(tenant)}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Link to={`/${tenant.slug}`} target="_blank">
+                            <Button variant="ghost" size="sm" title="サイトを開く">
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Link to={`/${tenant.slug}/admin`} target="_blank">
+                            <Button variant="ghost" size="sm" title="管理画面を開く">
+                              <Settings className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(tenant)} title="編集">
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
