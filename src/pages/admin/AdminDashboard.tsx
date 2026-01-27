@@ -1,17 +1,32 @@
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, Users, Truck, TrendingUp, CircleDollarSign, ShoppingCart } from "lucide-react";
+import { Package, Truck, CircleDollarSign, ShoppingCart } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/hooks/useTenant";
 
 export default function AdminDashboard() {
+  const { tenant } = useTenant();
+
   const { data: stats } = useQuery({
-    queryKey: ["admin-stats"],
+    queryKey: ["admin-stats", tenant?.id],
     queryFn: async () => {
+      // Build queries with tenant filter
+      let gachasQuery = supabase.from("gacha_masters").select("id", { count: "exact" });
+      let transactionsQuery = supabase.from("user_transactions").select("total_spent_points");
+      let pendingShippingQuery = supabase.from("inventory_actions").select("id", { count: "exact" }).eq("status", "pending").eq("action_type", "shipping");
+
+      // Apply tenant filter if tenant exists
+      if (tenant?.id) {
+        gachasQuery = gachasQuery.eq("tenant_id", tenant.id);
+        transactionsQuery = transactionsQuery.eq("tenant_id", tenant.id);
+        pendingShippingQuery = pendingShippingQuery.eq("tenant_id", tenant.id);
+      }
+
       const [gachas, transactions, pendingShipping] = await Promise.all([
-        supabase.from("gacha_masters").select("id", { count: "exact" }),
-        supabase.from("user_transactions").select("total_spent_points"),
-        supabase.from("inventory_actions").select("id", { count: "exact" }).eq("status", "pending").eq("action_type", "shipping"),
+        gachasQuery,
+        transactionsQuery,
+        pendingShippingQuery,
       ]);
 
       const totalRevenue = transactions.data?.reduce((acc, t) => acc + (t.total_spent_points || 0), 0) || 0;
@@ -33,7 +48,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <AdminLayout title="ダッシュボード">
+    <AdminLayout title={tenant ? `${tenant.name} ダッシュボード` : "ダッシュボード"}>
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {statCards.map((stat) => (
