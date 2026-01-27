@@ -7,6 +7,8 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  tenantId: string | null;
   signOut: () => Promise<void>;
 }
 
@@ -17,6 +19,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -24,14 +28,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[Auth] State changed:", event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
 
         if (session?.user) {
           setTimeout(() => {
-            checkAdminRole(session.user.id);
+            checkRoles(session.user.id);
           }, 0);
         } else {
           setIsAdmin(false);
+          setIsSuperAdmin(false);
+          setTenantId(null);
+          setLoading(false);
         }
       }
     );
@@ -40,22 +46,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] Initial session:", session?.user?.email);
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
 
       if (session?.user) {
-        checkAdminRole(session.user.id);
+        checkRoles(session.user.id);
+      } else {
+        setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkAdminRole = async (userId: string) => {
-    const { data, error } = await supabase.rpc("is_admin");
-    if (!error && data) {
-      setIsAdmin(true);
-    } else {
-      setIsAdmin(false);
+  const checkRoles = async (userId: string) => {
+    try {
+      // Check admin status
+      const { data: adminData } = await supabase.rpc("is_admin");
+      setIsAdmin(adminData === true);
+
+      // Check super admin status
+      const { data: superAdminData } = await supabase.rpc("is_super_admin");
+      setIsSuperAdmin(superAdminData === true);
+
+      // Get tenant_id from profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      
+      setTenantId(profile?.tenant_id ?? null);
+    } catch (error) {
+      console.error("[Auth] Error checking roles:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -66,6 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setIsAdmin(false);
+    setIsSuperAdmin(false);
+    setTenantId(null);
     
     // Sign out from Supabase (local scope to avoid 403 on expired sessions)
     try {
@@ -78,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, isAdmin, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, isAdmin, isSuperAdmin, tenantId, signOut }}>
       {children}
     </AuthContext.Provider>
   );
