@@ -4,26 +4,14 @@ import HeroBanner from "@/components/home/HeroBanner";
 import CategoryTabs from "@/components/home/CategoryTabs";
 import GachaCard from "@/components/gacha/GachaCard";
 import { motion } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTenantGachas } from "@/hooks/useTenantData";
+import { useTenant } from "@/hooks/useTenant";
 
 const Index = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
-
-  const { data: gachaList, isLoading } = useQuery({
-    queryKey: ["gachas-public"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("gacha_masters")
-        .select("*")
-        .eq("status", "active")
-        .order("created_at", { ascending: false });
-      
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { tenant } = useTenant();
+  const { data: gachaList, isLoading } = useTenantGachas("active");
 
   // カテゴリでフィルタリング & SOLD OUTを最後尾にソート
   const filteredGachaList = gachaList

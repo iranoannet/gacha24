@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useTenantBanners } from "@/hooks/useTenantData";
 import gachaBanner1 from "@/assets/gacha-banner-1.jpg";
 
 interface Banner {
@@ -14,20 +13,7 @@ interface Banner {
 
 const HeroBanner = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
-
-  const { data: banners } = useQuery({
-    queryKey: ["active-hero-banners"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("hero_banners")
-        .select("id, image_url, link_url, title")
-        .eq("is_active", true)
-        .order("display_order", { ascending: true });
-
-      if (error) throw error;
-      return data as Banner[];
-    },
-  });
+  const { data: banners } = useTenantBanners();
 
   // Fallback to default banner if no banners in DB
   const displayBanners: Banner[] = banners?.length

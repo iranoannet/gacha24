@@ -34,6 +34,7 @@ import {
 import { Plus, Trash2, GripVertical, Image, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantFilter } from "@/hooks/useTenantData";
 
 interface HeroBanner {
   id: string;
@@ -43,10 +44,12 @@ interface HeroBanner {
   display_order: number;
   is_active: boolean;
   created_at: string;
+  tenant_id: string | null;
 }
 
 const BannerManagement = () => {
   const queryClient = useQueryClient();
+  const { tenant, applyTenantFilter } = useTenantFilter();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<HeroBanner | null>(null);
   const [newBanner, setNewBanner] = useState({
@@ -58,13 +61,17 @@ const BannerManagement = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const { data: banners, isLoading } = useQuery({
-    queryKey: ["hero-banners"],
+    queryKey: ["hero-banners", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("hero_banners")
         .select("*")
         .order("display_order", { ascending: true });
 
+      // Apply tenant filter
+      query = applyTenantFilter(query);
+
+      const { data, error } = await query;
       if (error) throw error;
       return data as HeroBanner[];
     },
@@ -100,6 +107,7 @@ const BannerManagement = () => {
         link_url: newBanner.link_url || null,
         display_order: maxOrder,
         is_active: newBanner.is_active,
+        tenant_id: tenant?.id || null,
       });
 
       if (error) throw error;
@@ -221,6 +229,11 @@ const BannerManagement = () => {
             <p className="text-sm text-muted-foreground mt-1">
               トップページのスライドバナーを管理します（最大5枚、5秒間隔で自動スライド）
             </p>
+            {tenant && (
+              <p className="text-xs text-primary mt-1">
+                テナント: {tenant.name}
+              </p>
+            )}
           </div>
 
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
