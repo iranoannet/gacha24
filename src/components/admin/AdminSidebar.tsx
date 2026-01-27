@@ -26,6 +26,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
 
 const menuItems = [
   { title: "ダッシュボード", url: "/admin", icon: LayoutDashboard },
@@ -42,6 +43,15 @@ const menuItems = [
 export function AdminSidebar() {
   const location = useLocation();
   const { isSuperAdmin } = useAuth();
+  const { tenantSlug } = useTenant();
+
+  // Generate tenant-aware URLs
+  const getAdminUrl = (path: string) => {
+    if (tenantSlug) {
+      return `/${tenantSlug}${path}`;
+    }
+    return path;
+  };
 
   return (
     <Sidebar className="border-r border-border">
@@ -63,11 +73,13 @@ export function AdminSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
-                const isActive = location.pathname === item.url;
+                const url = getAdminUrl(item.url);
+                const isActive = location.pathname === url || 
+                  (tenantSlug && location.pathname === `/${tenantSlug}${item.url}`);
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive}>
-                      <NavLink to={item.url} className="flex items-center gap-2">
+                      <NavLink to={url} className="flex items-center gap-2">
                         <item.icon className="w-4 h-4" />
                         <span>{item.title}</span>
                       </NavLink>
@@ -94,7 +106,7 @@ export function AdminSidebar() {
           )}
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <NavLink to="/admin/settings" className="flex items-center gap-2">
+              <NavLink to={getAdminUrl("/admin/settings")} className="flex items-center gap-2">
                 <Settings className="w-4 h-4" />
                 <span>設定</span>
               </NavLink>
@@ -102,7 +114,7 @@ export function AdminSidebar() {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <NavLink to="/" className="flex items-center gap-2 text-muted-foreground">
+              <NavLink to={tenantSlug ? `/${tenantSlug}` : "/"} className="flex items-center gap-2 text-muted-foreground">
                 <LogOut className="w-4 h-4" />
                 <span>サイトに戻る</span>
               </NavLink>

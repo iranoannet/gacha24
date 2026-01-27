@@ -32,6 +32,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 import { ShippingLabelPrint } from "@/components/admin/ShippingLabelPrint";
+import { useTenant } from "@/hooks/useTenant";
 
 type ActionStatus = Database["public"]["Enums"]["action_status"];
 type InventoryAction = Database["public"]["Tables"]["inventory_actions"]["Row"];
@@ -45,6 +46,7 @@ const statusColors: Record<ActionStatus, { variant: "default" | "secondary" | "d
 
 export default function ShippingManagement() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   const [statusFilter, setStatusFilter] = useState<ActionStatus | "all">("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -53,7 +55,7 @@ export default function ShippingManagement() {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const { data: shippingRequests, isLoading } = useQuery({
-    queryKey: ["admin-shipping", statusFilter],
+    queryKey: ["admin-shipping", statusFilter, tenant?.id],
     queryFn: async () => {
       let query = supabase
         .from("inventory_actions")
@@ -67,6 +69,11 @@ export default function ShippingManagement() {
 
       if (statusFilter !== "all") {
         query = query.eq("status", statusFilter);
+      }
+
+      // Apply tenant filter
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
       }
 
       const { data, error } = await query;

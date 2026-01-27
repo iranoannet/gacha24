@@ -25,6 +25,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
 
 interface ProfileWithEmail {
   id: string;
@@ -43,14 +44,22 @@ export default function UserManagement() {
   const [newNote, setNewNote] = useState("");
   const queryClient = useQueryClient();
   const { user: adminUser } = useAuth();
+  const { tenant } = useTenant();
 
   const { data: profiles, isLoading } = useQuery({
-    queryKey: ["admin-profiles"],
+    queryKey: ["admin-profiles", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("profiles")
         .select("*")
         .order("created_at", { ascending: false });
+      
+      // Apply tenant filter
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data as ProfileWithEmail[];
     },
@@ -66,22 +75,34 @@ export default function UserManagement() {
   });
 
   const { data: payments } = useQuery({
-    queryKey: ["admin-all-payments"],
+    queryKey: ["admin-all-payments", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("payments")
         .select("user_id, amount, created_at");
+      
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
   });
 
   const { data: transactions } = useQuery({
-    queryKey: ["admin-all-transactions"],
+    queryKey: ["admin-all-transactions", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("user_transactions")
         .select("user_id, total_spent_points, play_count");
+      
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
