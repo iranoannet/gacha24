@@ -33,6 +33,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
+import { useTenantFilter } from "@/hooks/useTenantData";
 
 type GachaMaster = Database["public"]["Tables"]["gacha_masters"]["Row"];
 type GachaStatus = Database["public"]["Enums"]["gacha_status"];
@@ -56,6 +57,7 @@ interface SelectedCardItem {
 
 export default function GachaManagement() {
   const queryClient = useQueryClient();
+  const { tenant, applyTenantFilter } = useTenantFilter();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -91,12 +93,17 @@ export default function GachaManagement() {
 
   // ガチャ一覧
   const { data: gachas, isLoading } = useQuery({
-    queryKey: ["admin-gachas"],
+    queryKey: ["admin-gachas", tenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("gacha_masters")
         .select("*")
         .order("created_at", { ascending: false });
+      
+      // Apply tenant filter
+      query = applyTenantFilter(query);
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -149,6 +156,7 @@ export default function GachaManagement() {
           banner_url: bannerUrl || null,
           total_slots: 0,
           remaining_slots: 0,
+          tenant_id: tenant?.id || null,
         })
         .select()
         .single();
