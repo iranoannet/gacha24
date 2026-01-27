@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { useTenant } from "@/hooks/useTenant";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldX } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 interface TenantLayoutProps {
@@ -11,7 +11,7 @@ interface TenantLayoutProps {
  * Wrapper component that applies tenant-specific branding
  */
 export function TenantLayout({ children }: TenantLayoutProps) {
-  const { tenant, loading, error, tenantSlug } = useTenant();
+  const { tenant, loading, error, tenantSlug, ipBlocked, clientIP } = useTenant();
   const location = useLocation();
 
   // Check if we're on an admin route - admin routes should work without a tenant
@@ -21,6 +21,24 @@ export function TenantLayout({ children }: TenantLayoutProps) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Show IP blocked message
+  if (ipBlocked && tenantSlug) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4 p-8">
+          <ShieldX className="w-16 h-16 text-destructive mx-auto" />
+          <h1 className="text-2xl font-bold text-destructive">アクセス制限</h1>
+          <p className="text-muted-foreground">
+            このサイトへのアクセスは許可されていません。
+          </p>
+          <p className="text-xs text-muted-foreground/60">
+            あなたのIP: {clientIP || "不明"}
+          </p>
+        </div>
       </div>
     );
   }

@@ -463,6 +463,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          allowed_ips: string[] | null
           created_at: string
           custom_domain: string | null
           id: string
@@ -474,6 +475,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allowed_ips?: string[] | null
           created_at?: string
           custom_domain?: string | null
           id?: string
@@ -485,6 +487,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allowed_ips?: string[] | null
           created_at?: string
           custom_domain?: string | null
           id?: string
