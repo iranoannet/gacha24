@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.auto-convert-expired-slots]
 verify_jwt = false
+
+[functions.check-ip-access]
+verify_jwt = false

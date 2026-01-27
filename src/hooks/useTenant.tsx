@@ -16,6 +16,8 @@ interface TenantContextType {
   tenantSlug: string | null;
   loading: boolean;
   error: string | null;
+  ipBlocked: boolean;
+  clientIP: string | null;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -65,6 +67,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ipBlocked, setIpBlocked] = useState(false);
+  const [clientIP, setClientIP] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTenant = async () => {
@@ -81,6 +85,31 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         }
 
         setTenantSlug(identifier.value);
+
+        // Check IP access first via edge function
+        try {
+          const { data: ipCheckResult, error: ipCheckError } = await supabase.functions.invoke(
+            "check-ip-access",
+            { body: { tenantSlug: identifier.value } }
+          );
+
+          if (ipCheckError) {
+            console.error("[Tenant] IP check error:", ipCheckError);
+            // Continue without IP check if edge function fails
+          } else if (ipCheckResult) {
+            setClientIP(ipCheckResult.ip || null);
+            
+            if (ipCheckResult.allowed === false) {
+              console.log("[Tenant] IP blocked:", ipCheckResult);
+              setIpBlocked(true);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (ipError) {
+          console.error("[Tenant] IP check failed:", ipError);
+          // Continue without IP check if edge function fails
+        }
 
         let query = supabase.from("tenants").select("*");
 
@@ -114,7 +143,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <TenantContext.Provider value={{ tenant, tenantSlug, loading, error }}>
+    <TenantContext.Provider value={{ tenant, tenantSlug, loading, error, ipBlocked, clientIP }}>
       {children}
     </TenantContext.Provider>
   );
