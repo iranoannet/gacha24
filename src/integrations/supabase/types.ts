@@ -614,6 +614,15 @@ export type Database = {
       }
     }
     Functions: {
+      create_tenant_profile: {
+        Args: {
+          p_display_name?: string
+          p_email?: string
+          p_tenant_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       get_user_tenant_id: { Args: never; Returns: string }
       has_role: {
         Args: {

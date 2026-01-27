@@ -2,23 +2,38 @@ import { Bell, LogIn, UserPlus, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 const Header = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+  const { tenant, tenantSlug } = useTenant();
 
-  // ユーザーのプロファイル（ポイント残高）を取得
+  // Get the base path for current tenant
+  const basePath = tenantSlug ? `/${tenantSlug}` : "";
+
+  // ユーザーのテナント固有プロファイル（ポイント残高）を取得
   const { data: profile } = useQuery({
-    queryKey: ["user-profile-header", user?.id],
+    queryKey: ["user-profile-header", user?.id, tenant?.id],
     queryFn: async () => {
       if (!user) return null;
-      const { data, error } = await supabase
+      
+      // Query profile for current tenant
+      let query = supabase
         .from("profiles")
         .select("points_balance")
-        .eq("user_id", user.id)
-        .single();
+        .eq("user_id", user.id);
+      
+      // Filter by tenant_id
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      } else {
+        query = query.is("tenant_id", null);
+      }
+      
+      const { data, error } = await query.maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -32,9 +47,9 @@ const Header = () => {
     <header className="sticky top-0 z-40 bg-card border-b border-border">
       <div className="container flex items-center justify-between h-14 px-4">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2">
+        <Link to={basePath || "/"} className="flex items-center gap-2">
           <h1 className="text-xl font-black text-gradient-gold">
-            トレカガチャ
+            {tenant?.name || "トレカガチャ"}
           </h1>
         </Link>
 
@@ -44,7 +59,7 @@ const Header = () => {
             <>
               {/* Points Display - Clickable */}
               <button
-                onClick={() => navigate("/points")}
+                onClick={() => navigate(`${basePath}/points`)}
                 className="points-badge cursor-pointer hover:opacity-80 transition-opacity"
               >
                 <span className="text-xs">JP¥</span>
@@ -56,7 +71,7 @@ const Header = () => {
                 size="sm"
                 variant="ghost"
                 className="h-8 w-8 p-0 rounded-full relative"
-                onClick={() => navigate("/notifications")}
+                onClick={() => navigate(`${basePath}/notifications`)}
               >
                 <Bell className="h-5 w-5 text-muted-foreground" />
                 <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-accent text-[10px] font-bold text-accent-foreground flex items-center justify-center">
@@ -72,7 +87,7 @@ const Header = () => {
                 className="btn-gacha h-8 px-3 text-sm font-bold"
                 onClick={() => {
                   console.log("[Header] Sign up clicked");
-                  navigate("/auth?mode=signup");
+                  navigate(`${basePath}/auth?mode=signup`);
                 }}
               >
                 新規登録
@@ -85,7 +100,7 @@ const Header = () => {
                 className="h-8 px-3 text-sm border-primary text-primary hover:bg-primary hover:text-primary-foreground"
                 onClick={() => {
                   console.log("[Header] Login clicked");
-                  navigate("/auth?mode=login");
+                  navigate(`${basePath}/auth?mode=login`);
                 }}
               >
                 ログイン
