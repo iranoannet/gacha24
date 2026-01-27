@@ -35,6 +35,7 @@ interface ProfileWithEmail {
   created_at: string;
   last_login_at: string | null;
   email: string | null;
+  tenant_id: string | null;
 }
 
 export default function UserManagement() {
@@ -124,19 +125,20 @@ export default function UserManagement() {
   });
 
   const adjustPointsMutation = useMutation({
-    mutationFn: async ({ userId, adjustment }: { userId: string; adjustment: number }) => {
-      const profile = profiles?.find(p => p.user_id === userId);
-      if (!profile) throw new Error("User not found");
+    mutationFn: async ({ profileId, adjustment }: { profileId: string; adjustment: number }) => {
+      const profile = profiles?.find(p => p.id === profileId);
+      if (!profile) throw new Error("Profile not found");
       
       const newBalance = Math.max(0, profile.points_balance + adjustment);
+      // Use profile ID to update the specific tenant profile
       const { error } = await supabase
         .from("profiles")
         .update({ points_balance: newBalance })
-        .eq("user_id", userId);
+        .eq("id", profileId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-profiles", tenant?.id] });
       toast.success("ポイントを更新しました");
       setPointAdjustment(0);
     },
@@ -351,7 +353,7 @@ export default function UserManagement() {
                     <Button
                       onClick={() =>
                         adjustPointsMutation.mutate({
-                          userId: selectedUser.user_id,
+                          profileId: selectedUser.id,
                           adjustment: pointAdjustment,
                         })
                       }

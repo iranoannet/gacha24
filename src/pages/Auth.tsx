@@ -88,12 +88,16 @@ export default function Auth() {
       return;
     }
 
-    // Check if user belongs to current tenant
+    // Check if user has a profile for current tenant
     if (data.user) {
+      const currentTenantId = tenant?.id || null;
+      
+      // Query for profile with matching tenant_id
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("tenant_id")
+        .select("id, tenant_id")
         .eq("user_id", data.user.id)
+        .eq("tenant_id", currentTenantId)
         .maybeSingle();
 
       if (profileError) {
@@ -103,24 +107,42 @@ export default function Auth() {
         return;
       }
 
-      // Validate tenant membership
-      const userTenantId = profile?.tenant_id;
-      const currentTenantId = tenant?.id || null;
+      // If no profile for this tenant, create one (for existing users logging into new tenant)
+      if (!profile && currentTenantId) {
+        // User exists but doesn't have a profile for this tenant
+        // Create a new tenant-specific profile
+        const { error: createError } = await supabase.rpc("create_tenant_profile", {
+          p_user_id: data.user.id,
+          p_tenant_id: currentTenantId,
+          p_display_name: data.user.email,
+          p_email: data.user.email,
+        });
 
-      // If we're on a tenant site and user doesn't belong to this tenant
-      if (currentTenantId && userTenantId !== currentTenantId) {
-        setLoading(false);
-        toast.error("このサイトのアカウントではありません。正しいサイトからログインしてください。");
-        await supabase.auth.signOut({ scope: 'local' });
-        return;
-      }
+        if (createError) {
+          setLoading(false);
+          toast.error("このテナントへの登録に失敗しました。新規登録してください。");
+          await supabase.auth.signOut({ scope: 'local' });
+          return;
+        }
+        
+        toast.success("新しいサイトへようこそ！アカウントを作成しました。");
+      } else if (!profile && !currentTenantId) {
+        // User has profiles for tenants but not for the default site
+        // Check if they have any profile at all
+        const { data: anyProfile } = await supabase
+          .from("profiles")
+          .select("tenant_id")
+          .eq("user_id", data.user.id)
+          .limit(1)
+          .maybeSingle();
 
-      // If we're on the default site (no tenant) and user belongs to a specific tenant
-      if (!currentTenantId && userTenantId) {
-        setLoading(false);
-        toast.error("このサイトのアカウントではありません。テナントサイトからログインしてください。");
-        await supabase.auth.signOut({ scope: 'local' });
-        return;
+        if (anyProfile?.tenant_id) {
+          // User belongs to a specific tenant, not the default site
+          setLoading(false);
+          toast.error("このサイトのアカウントではありません。テナントサイトからログインしてください。");
+          await supabase.auth.signOut({ scope: 'local' });
+          return;
+        }
       }
     }
 
