@@ -50,6 +50,7 @@ export type Database = {
           name: string
           prize_tier: Database["public"]["Enums"]["prize_tier"]
           rarity: Database["public"]["Enums"]["card_rarity"]
+          tenant_id: string | null
         }
         Insert: {
           admin_note?: string | null
@@ -62,6 +63,7 @@ export type Database = {
           name: string
           prize_tier?: Database["public"]["Enums"]["prize_tier"]
           rarity?: Database["public"]["Enums"]["card_rarity"]
+          tenant_id?: string | null
         }
         Update: {
           admin_note?: string | null
@@ -74,6 +76,7 @@ export type Database = {
           name?: string
           prize_tier?: Database["public"]["Enums"]["prize_tier"]
           rarity?: Database["public"]["Enums"]["card_rarity"]
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -81,6 +84,13 @@ export type Database = {
             columns: ["gacha_id"]
             isOneToOne: false
             referencedRelation: "gacha_masters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cards_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -98,6 +108,7 @@ export type Database = {
           price_per_play: number
           remaining_slots: number
           status: Database["public"]["Enums"]["gacha_status"]
+          tenant_id: string | null
           title: string
           total_slots: number
           updated_at: string
@@ -114,6 +125,7 @@ export type Database = {
           price_per_play?: number
           remaining_slots?: number
           status?: Database["public"]["Enums"]["gacha_status"]
+          tenant_id?: string | null
           title: string
           total_slots?: number
           updated_at?: string
@@ -130,11 +142,20 @@ export type Database = {
           price_per_play?: number
           remaining_slots?: number
           status?: Database["public"]["Enums"]["gacha_status"]
+          tenant_id?: string | null
           title?: string
           total_slots?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gacha_masters_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gacha_slots: {
         Row: {
@@ -212,6 +233,7 @@ export type Database = {
           image_url: string
           is_active: boolean
           link_url: string | null
+          tenant_id: string | null
           title: string | null
           updated_at: string
         }
@@ -222,6 +244,7 @@ export type Database = {
           image_url: string
           is_active?: boolean
           link_url?: string | null
+          tenant_id?: string | null
           title?: string | null
           updated_at?: string
         }
@@ -232,10 +255,19 @@ export type Database = {
           image_url?: string
           is_active?: boolean
           link_url?: string | null
+          tenant_id?: string | null
           title?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "hero_banners_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inventory_actions: {
         Row: {
@@ -247,6 +279,7 @@ export type Database = {
           requested_at: string
           slot_id: string | null
           status: Database["public"]["Enums"]["action_status"]
+          tenant_id: string | null
           tracking_number: string | null
           user_id: string
         }
@@ -259,6 +292,7 @@ export type Database = {
           requested_at?: string
           slot_id?: string | null
           status?: Database["public"]["Enums"]["action_status"]
+          tenant_id?: string | null
           tracking_number?: string | null
           user_id: string
         }
@@ -271,6 +305,7 @@ export type Database = {
           requested_at?: string
           slot_id?: string | null
           status?: Database["public"]["Enums"]["action_status"]
+          tenant_id?: string | null
           tracking_number?: string | null
           user_id?: string
         }
@@ -296,6 +331,13 @@ export type Database = {
             referencedRelation: "gacha_slots"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inventory_actions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
         ]
       }
       payments: {
@@ -307,6 +349,7 @@ export type Database = {
           points_added: number
           status: string
           stripe_payment_id: string | null
+          tenant_id: string | null
           user_id: string
         }
         Insert: {
@@ -317,6 +360,7 @@ export type Database = {
           points_added: number
           status?: string
           stripe_payment_id?: string | null
+          tenant_id?: string | null
           user_id: string
         }
         Update: {
@@ -327,9 +371,18 @@ export type Database = {
           points_added?: number
           status?: string
           stripe_payment_id?: string | null
+          tenant_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -350,6 +403,7 @@ export type Database = {
           points_balance: number
           postal_code: string | null
           prefecture: string | null
+          tenant_id: string | null
           updated_at: string
           user_id: string
         }
@@ -371,6 +425,7 @@ export type Database = {
           points_balance?: number
           postal_code?: string | null
           prefecture?: string | null
+          tenant_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -392,8 +447,50 @@ export type Database = {
           points_balance?: number
           postal_code?: string | null
           prefecture?: string | null
+          tenant_id?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          primary_color: string | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name: string
+          primary_color?: string | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          primary_color?: string | null
+          slug?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -426,6 +523,7 @@ export type Database = {
           play_count: number
           result_items: Json
           status: Database["public"]["Enums"]["transaction_status"]
+          tenant_id: string | null
           total_spent_points: number
           user_id: string
         }
@@ -436,6 +534,7 @@ export type Database = {
           play_count?: number
           result_items?: Json
           status?: Database["public"]["Enums"]["transaction_status"]
+          tenant_id?: string | null
           total_spent_points?: number
           user_id: string
         }
@@ -446,6 +545,7 @@ export type Database = {
           play_count?: number
           result_items?: Json
           status?: Database["public"]["Enums"]["transaction_status"]
+          tenant_id?: string | null
           total_spent_points?: number
           user_id?: string
         }
@@ -455,6 +555,13 @@ export type Database = {
             columns: ["gacha_id"]
             isOneToOne: false
             referencedRelation: "gacha_masters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_transactions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -504,6 +611,7 @@ export type Database = {
       }
     }
     Functions: {
+      get_user_tenant_id: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -520,7 +628,7 @@ export type Database = {
     Enums: {
       action_status: "pending" | "processing" | "completed" | "shipped"
       action_type: "shipping" | "conversion"
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "super_admin"
       card_category: "yugioh" | "pokemon" | "weiss" | "onepiece"
       card_rarity: "S" | "A" | "B" | "C" | "D"
       gacha_status: "draft" | "active" | "sold_out" | "archived"
@@ -655,7 +763,7 @@ export const Constants = {
     Enums: {
       action_status: ["pending", "processing", "completed", "shipped"],
       action_type: ["shipping", "conversion"],
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "super_admin"],
       card_category: ["yugioh", "pokemon", "weiss", "onepiece"],
       card_rarity: ["S", "A", "B", "C", "D"],
       gacha_status: ["draft", "active", "sold_out", "archived"],
