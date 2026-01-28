@@ -1,8 +1,8 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Coins, Zap } from "lucide-react";
+import { Coins, Zap, Clock, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { useTenant } from "@/hooks/useTenant";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +13,7 @@ interface DarkThemeGachaCardProps {
   pricePerPlay: number;
   totalSlots: number;
   remainingSlots: number;
+  displayTags?: string[];
 }
 
 const DarkThemeGachaCard = ({
@@ -22,12 +23,17 @@ const DarkThemeGachaCard = ({
   pricePerPlay,
   totalSlots,
   remainingSlots,
+  displayTags = [],
 }: DarkThemeGachaCardProps) => {
   const navigate = useNavigate();
   const { tenantSlug } = useTenant();
   const soldPercentage = ((totalSlots - remainingSlots) / totalSlots) * 100;
   const isSoldOut = remainingSlots === 0;
   const basePath = tenantSlug ? `/${tenantSlug}` : "";
+
+  // Check for display tags
+  const isNewArrival = displayTags.includes("new_arrivals");
+  const isHotItem = displayTags.includes("hot_items");
 
   const handleNavigateToDetail = () => {
     navigate(`${basePath}/gacha/${id}`);
@@ -65,10 +71,26 @@ const DarkThemeGachaCard = ({
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-[hsl(var(--dark-surface-elevated))] via-transparent to-transparent opacity-60" />
         
-        {/* Price badge */}
+        {/* Tag badges (top left) */}
+        <div className="absolute top-3 left-3 flex flex-col gap-1">
+          {isNewArrival && (
+            <Badge className="bg-[hsl(var(--dark-neon-secondary))] text-[hsl(var(--dark-background))] border-0 shadow-[0_0_10px_hsl(var(--dark-neon-secondary)/0.5)] flex items-center gap-1 text-xs">
+              <Clock className="h-3 w-3" />
+              NEW
+            </Badge>
+          )}
+          {isHotItem && (
+            <Badge className="bg-[hsl(var(--dark-neon-accent))] text-white border-0 shadow-[0_0_10px_hsl(var(--dark-neon-accent)/0.5)] flex items-center gap-1 text-xs">
+              <Flame className="h-3 w-3" />
+              HOT
+            </Badge>
+          )}
+        </div>
+
+        {/* Price badge (top right) */}
         <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[hsl(var(--dark-neon-gold)/0.9)] text-[hsl(var(--dark-background))] font-bold text-sm shadow-[0_0_15px_hsl(var(--dark-neon-gold)/0.5)]">
           <Coins className="h-4 w-4" />
-          {pricePerPlay.toLocaleString()}
+          ¥{pricePerPlay.toLocaleString()}
         </div>
 
         {isSoldOut && (
@@ -89,7 +111,7 @@ const DarkThemeGachaCard = ({
 
         {/* Remaining slots */}
         <div className="flex items-center justify-between text-sm mb-2">
-          <span className="text-[hsl(var(--dark-muted))]">残り</span>
+          <span className="text-[hsl(var(--dark-muted))]">Remaining</span>
           <span className="font-bold text-[hsl(var(--dark-foreground))]">
             {remainingSlots === Infinity ? "∞" : remainingSlots.toLocaleString()}
             <span className="text-[hsl(var(--dark-muted))] font-normal"> / {totalSlots.toLocaleString()}</span>
@@ -120,7 +142,7 @@ const DarkThemeGachaCard = ({
             onClick={handleNavigateToDetail}
           >
             <Zap className="h-4 w-4 mr-1" />
-            1回ガチャ
+            Play
           </Button>
           {pricePerPlay <= 100 && (
             <Button
@@ -134,7 +156,7 @@ const DarkThemeGachaCard = ({
               disabled={isSoldOut}
               onClick={handleNavigateToDetail}
             >
-              10連ガチャ
+              10x Play
             </Button>
           )}
         </div>

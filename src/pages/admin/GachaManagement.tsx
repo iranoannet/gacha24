@@ -78,6 +78,12 @@ export default function GachaManagement() {
 当たりカード含め、初期傷など一部損傷箇所がある場合がございます。商品の返金・交換はできません。
 上記、ご了承の上でご購入をお願い致します。`;
 
+  // Display tag options
+  const DISPLAY_TAG_OPTIONS = [
+    { id: "new_arrivals", label: "新着商品 (New Arrivals)" },
+    { id: "hot_items", label: "激アツ商品 (Hot Items)" },
+  ];
+
   const [formData, setFormData] = useState({
     title: "",
     price_per_play: 500,
@@ -89,6 +95,7 @@ export default function GachaManagement() {
     notice_text: defaultNotice,
     animation_type: "A" as "A" | "B", // A = スロット風, B = カードパック開封風
     fake_s_tier_chance: 15, // フェイク演出確率（0-100%）
+    display_tags: [] as string[], // Display tags for homepage sections
   });
 
   // ガチャ一覧
@@ -257,6 +264,7 @@ export default function GachaManagement() {
       notice_text: defaultNotice,
       animation_type: "A",
       fake_s_tier_chance: 15,
+      display_tags: [],
     });
     setSelectedItems([]);
     setBannerFile(null);
@@ -412,6 +420,7 @@ export default function GachaManagement() {
         notice_text: (gacha as any).notice_text || defaultNotice,
         animation_type: (gacha as any).animation_type || "A",
         fake_s_tier_chance: (gacha as any).fake_s_tier_chance ?? 15,
+        display_tags: (gacha as any).display_tags || [],
       });
       setSelectedCategory((gacha as any).category || null);
       setSelectedItems(copiedItems);
@@ -441,6 +450,7 @@ export default function GachaManagement() {
       notice_text: (gacha as any).notice_text || defaultNotice,
       animation_type: (gacha as any).animation_type || "A",
       fake_s_tier_chance: (gacha as any).fake_s_tier_chance ?? 15,
+      display_tags: (gacha as any).display_tags || [],
     });
     setBannerFile(null);
     setBannerPreview(gacha.banner_url || null);
@@ -812,6 +822,45 @@ export default function GachaManagement() {
                       </p>
                     </div>
                   )}
+                  
+                  {/* Display Tags Selection */}
+                  <div>
+                    <Label>表示タグ（ホームページセクション）</Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {DISPLAY_TAG_OPTIONS.map((tag) => {
+                        const isSelected = formData.display_tags.includes(tag.id);
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setFormData({
+                                  ...formData,
+                                  display_tags: formData.display_tags.filter((t) => t !== tag.id),
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  display_tags: [...formData.display_tags, tag.id],
+                                });
+                              }
+                            }}
+                            className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background text-muted-foreground border-border hover:border-primary"
+                            }`}
+                          >
+                            {tag.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      選択したタグのセクションにこのガチャが表示されます（get24サイト用）
+                    </p>
+                  </div>
                 </div>
 
                 {/* 商品ごとの枚数・賞設定 */}
@@ -1149,6 +1198,46 @@ export default function GachaManagement() {
                   </SelectContent>
                 </Select>
               </div>
+              
+              {/* Display Tags Selection */}
+              <div>
+                <Label>表示タグ（ホームページセクション）</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {DISPLAY_TAG_OPTIONS.map((tag) => {
+                    const isSelected = formData.display_tags.includes(tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setFormData({
+                              ...formData,
+                              display_tags: formData.display_tags.filter((t) => t !== tag.id),
+                            });
+                          } else {
+                            setFormData({
+                              ...formData,
+                              display_tags: [...formData.display_tags, tag.id],
+                            });
+                          }
+                        }}
+                        className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-muted-foreground border-border hover:border-primary"
+                        }`}
+                      >
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  選択したタグのセクションにこのガチャが表示されます
+                </p>
+              </div>
+
               <div>
                 <Label htmlFor="edit-notice">注意書き</Label>
                 <textarea

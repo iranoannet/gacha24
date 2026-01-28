@@ -58,7 +58,7 @@ const DarkThemeHeader = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--dark-muted))]" />
               <Input
                 type="search"
-                placeholder="ガチャを検索..."
+                placeholder="Search gacha..."
                 className="w-64 pl-10 bg-[hsl(var(--dark-input))] border-[hsl(var(--dark-border))] text-[hsl(var(--dark-foreground))] placeholder:text-[hsl(var(--dark-muted))] focus:border-[hsl(var(--dark-neon-primary))] focus:ring-[hsl(var(--dark-neon-primary)/0.3)]"
               />
             </div>
@@ -109,7 +109,7 @@ const DarkThemeHeader = () => {
                 )}
                 onClick={() => navigate(`${basePath}/auth?mode=signup`)}
               >
-                新規登録
+                Sign Up
               </Button>
 
               {/* Login Button */}
@@ -119,11 +119,11 @@ const DarkThemeHeader = () => {
                 className="h-9 px-4 text-sm font-medium rounded-lg border-[hsl(var(--dark-neon-primary))] text-[hsl(var(--dark-neon-primary))] bg-transparent hover:bg-[hsl(var(--dark-neon-primary)/0.1)]"
                 onClick={() => navigate(`${basePath}/auth?mode=login`)}
               >
-                ログイン
+                Login
               </Button>
             </>
           ) : (
-            <span className="text-xs text-[hsl(var(--dark-muted))]">読込中...</span>
+            <span className="text-xs text-[hsl(var(--dark-muted))]">Loading...</span>
           )}
         </div>
       </div>
