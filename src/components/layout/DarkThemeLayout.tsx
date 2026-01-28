@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import DarkThemeSidebar from "./DarkThemeSidebar";
 import DarkThemeHeader from "./DarkThemeHeader";
+import DarkThemeBottomNav from "./DarkThemeBottomNav";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -14,7 +15,7 @@ interface DarkThemeLayoutProps {
 /**
  * Dark theme layout with left sidebar for specific tenants (e.g., get24)
  * Inspired by wikibet.com design
- * On mobile: sidebar is hidden by default
+ * On mobile: no sidebar, use bottom navigation instead
  */
 const DarkThemeLayout = ({ 
   children, 
@@ -24,8 +25,22 @@ const DarkThemeLayout = ({
 }: DarkThemeLayoutProps) => {
   const isMobile = useIsMobile();
 
+  // Mobile layout: no sidebar, bottom nav instead
+  if (isMobile) {
+    return (
+      <div className="min-h-screen flex flex-col dark-theme">
+        <DarkThemeHeader />
+        <main className="flex-1 bg-[hsl(var(--dark-background))] overflow-x-hidden pb-16">
+          {children}
+        </main>
+        <DarkThemeBottomNav />
+      </div>
+    );
+  }
+
+  // Desktop layout: sidebar
   return (
-    <SidebarProvider defaultOpen={!isMobile}>
+    <SidebarProvider defaultOpen={true}>
       <div className="min-h-screen flex w-full dark-theme">
         <DarkThemeSidebar
           selectedTag={selectedTag}
