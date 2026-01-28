@@ -1,41 +1,46 @@
 import { cn } from "@/lib/utils";
+import categoryAll from "@/assets/category-all.jpg";
+import categoryPokemon from "@/assets/category-pokemon.jpg";
+import categoryYugioh from "@/assets/category-yugioh.jpg";
+import categoryOnepiece from "@/assets/category-onepiece.jpg";
+import categoryWeiss from "@/assets/category-weiss.jpg";
 
-// Categories with gradient backgrounds (wikibet style)
+// Categories with gradient backgrounds and brand-specific imagery
 const categories = [
   { 
     id: "all", 
     label: "ALL", 
     sublabel: "Gacha",
     gradient: "from-purple-600 to-indigo-600",
-    image: "https://images.unsplash.com/photo-1614850715649-1d0106293bd1?w=200&h=280&fit=crop"
+    image: categoryAll
   },
   { 
     id: "pokemon", 
     label: "POKEMON", 
     sublabel: "Cards",
     gradient: "from-yellow-500 to-orange-500",
-    image: "https://images.unsplash.com/photo-1613771404784-3a5686aa2be3?w=200&h=280&fit=crop"
+    image: categoryPokemon
   },
   { 
     id: "yugioh", 
     label: "YU-GI-OH!", 
     sublabel: "Cards",
     gradient: "from-red-600 to-pink-600",
-    image: "https://images.unsplash.com/photo-1642755017878-ebbb17016711?w=200&h=280&fit=crop"
+    image: categoryYugioh
   },
   { 
     id: "onepiece", 
     label: "ONE PIECE", 
     sublabel: "Cards",
     gradient: "from-cyan-500 to-blue-600",
-    image: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=200&h=280&fit=crop"
+    image: categoryOnepiece
   },
   { 
     id: "weiss", 
     label: "WEISS", 
     sublabel: "Schwarz",
     gradient: "from-green-500 to-emerald-600",
-    image: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=200&h=280&fit=crop"
+    image: categoryWeiss
   },
 ];
 
