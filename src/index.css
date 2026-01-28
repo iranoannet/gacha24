@@ -77,6 +77,31 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
+  /* Dark Theme for specific tenants (e.g., get24) */
+  .dark-theme {
+    --dark-background: 228 15% 12%;
+    --dark-surface: 228 15% 16%;
+    --dark-surface-elevated: 228 15% 20%;
+    --dark-foreground: 220 15% 95%;
+    --dark-muted: 220 10% 55%;
+    --dark-border: 228 15% 25%;
+    --dark-input: 228 15% 20%;
+    --dark-hover: 228 15% 22%;
+    
+    /* Neon accent colors */
+    --dark-neon-primary: 160 100% 50%;
+    --dark-neon-secondary: 180 100% 45%;
+    --dark-neon-accent: 340 100% 55%;
+    --dark-neon-gold: 45 100% 55%;
+    
+    /* Card rarity with glow effects */
+    --dark-rarity-s: 280 100% 65%;
+    --dark-rarity-a: 45 100% 55%;
+    --dark-rarity-b: 210 100% 60%;
+    --dark-rarity-c: 140 70% 50%;
+    --dark-rarity-d: 220 10% 50%;
+  }
 }
 
 @layer base {
