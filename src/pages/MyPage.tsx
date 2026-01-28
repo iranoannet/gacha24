@@ -19,9 +19,27 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
 import { toast } from "sonner";
+import DarkThemeMyPage from "./DarkThemeMyPage";
+
+// Tenants that use dark theme
+const DARK_THEME_TENANTS = ["get24", "get"];
 
 const MyPage = () => {
+  const { tenantSlug } = useTenant();
+  
+  // Check if this tenant uses dark theme
+  const useDarkTheme = tenantSlug && DARK_THEME_TENANTS.includes(tenantSlug);
+  
+  if (useDarkTheme) {
+    return <DarkThemeMyPage />;
+  }
+  
+  return <LightThemeMyPage />;
+};
+
+const LightThemeMyPage = () => {
   const navigate = useNavigate();
   const { user, loading, signOut } = useAuth();
 

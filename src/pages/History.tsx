@@ -1,8 +1,22 @@
 import MainLayout from "@/components/layout/MainLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { History as HistoryIcon } from "lucide-react";
+import { useTenant } from "@/hooks/useTenant";
+import DarkThemeHistory from "./DarkThemeHistory";
+
+// Tenants that use dark theme
+const DARK_THEME_TENANTS = ["get24", "get"];
 
 const History = () => {
+  const { tenantSlug } = useTenant();
+  
+  // Check if this tenant uses dark theme
+  const useDarkTheme = tenantSlug && DARK_THEME_TENANTS.includes(tenantSlug);
+  
+  if (useDarkTheme) {
+    return <DarkThemeHistory />;
+  }
+  
   return (
     <MainLayout>
       <div className="container px-4 py-6">
