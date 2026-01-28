@@ -18,8 +18,9 @@ const categories = [
     id: "pokemon", 
     label: "POKEMON", 
     sublabel: "Cards",
-    gradient: "from-yellow-500 to-orange-500",
-    image: categoryPokemon
+    gradient: "from-amber-400 via-yellow-500 to-orange-500",
+    image: categoryPokemon,
+    imageStyle: "object-contain scale-110"
   },
   { 
     id: "yugioh", 
@@ -85,7 +86,10 @@ const DarkThemeCategorySection = ({
                   <img 
                     src={category.image} 
                     alt={category.label}
-                    className="w-full h-full object-cover opacity-60 mix-blend-overlay"
+                    className={cn(
+                      "w-full h-full",
+                      (category as any).imageStyle || "object-cover opacity-60 mix-blend-overlay"
+                    )}
                   />
                 </div>
 
