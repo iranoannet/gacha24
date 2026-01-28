@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import MainLayout from "@/components/layout/MainLayout";
+import DarkThemeLayout from "@/components/layout/DarkThemeLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,31 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Phone, ArrowLeft, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { useTenant } from "@/hooks/useTenant";
-import DarkThemeSmsVerification from "./DarkThemeSmsVerification";
+import { cn } from "@/lib/utils";
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 
-// Tenants that use dark theme
-const DARK_THEME_TENANTS = ["get24", "get"];
-
-const SmsVerification = () => {
-  const { tenantSlug } = useTenant();
-  
-  // Check if this tenant uses dark theme
-  const useDarkTheme = tenantSlug && DARK_THEME_TENANTS.includes(tenantSlug);
-  
-  if (useDarkTheme) {
-    return <DarkThemeSmsVerification />;
-  }
-  
-  return <LightThemeSmsVerification />;
-};
-
-const LightThemeSmsVerification = () => {
+const DarkThemeSmsVerification = () => {
   const navigate = useNavigate();
+  const { tenantSlug } = useTenant();
+  const basePath = tenantSlug ? `/${tenantSlug}` : "";
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
@@ -48,34 +34,27 @@ const LightThemeSmsVerification = () => {
     setError("");
     
     if (!validatePhoneNumber(phoneNumber)) {
-      setError("有効な携帯電話番号を入力してください（例: 090-1234-5678）");
+      setError("Please enter a valid mobile phone number (e.g., 090-1234-5678)");
       return;
     }
 
     setIsLoading(true);
-    
-    // TODO: Implement actual SMS sending via Edge Function
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    toast.success("認証コードを送信しました");
+    toast.success("Verification code sent");
     setStep("code");
     setIsLoading(false);
   };
 
   const handleVerifyCode = async () => {
     if (verificationCode.length !== 6) {
-      setError("6桁の認証コードを入力してください");
+      setError("Please enter the 6-digit verification code");
       return;
     }
 
     setIsLoading(true);
-    
-    // TODO: Implement actual code verification
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // For demo purposes, accept any 6-digit code
-    toast.success("SMS認証が完了しました");
-    navigate("/mypage");
+    toast.success("SMS verification complete");
+    navigate(basePath + "/mypage");
     setIsLoading(false);
   };
 
@@ -87,68 +66,77 @@ const LightThemeSmsVerification = () => {
   };
 
   return (
-    <MainLayout>
+    <DarkThemeLayout>
       <div className="container px-4 py-6 max-w-2xl mx-auto">
         <button
-          onClick={() => step === "code" ? setStep("phone") : navigate("/mypage")}
-          className="flex items-center gap-2 text-muted-foreground mb-4 hover:text-foreground transition-colors"
+          onClick={() => step === "code" ? setStep("phone") : navigate(basePath + "/mypage")}
+          className="flex items-center gap-2 text-[hsl(var(--dark-muted))] mb-4 hover:text-[hsl(var(--dark-foreground))] transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span className="text-sm">{step === "code" ? "電話番号入力に戻る" : "マイページに戻る"}</span>
+          <span className="text-sm">{step === "code" ? "Back to phone entry" : "Back to My Page"}</span>
         </button>
 
-        <h1 className="text-xl font-bold mb-6">SMS認証</h1>
+        <h1 className="text-xl font-bold mb-6 text-[hsl(var(--dark-neon-primary))]">SMS Verification</h1>
 
         {step === "phone" ? (
-          <Card className="p-6">
+          <Card className={cn(
+            "p-6",
+            "bg-[hsl(var(--dark-surface-elevated))] border-[hsl(var(--dark-border))]"
+          )}>
             <div className="flex items-center gap-3 mb-6">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Phone className="h-5 w-5 text-primary" />
+              <div className="h-10 w-10 rounded-full bg-[hsl(var(--dark-neon-gold)/0.2)] flex items-center justify-center">
+                <Phone className="h-5 w-5 text-[hsl(var(--dark-neon-gold))]" />
               </div>
               <div>
-                <p className="font-bold text-foreground">電話番号を入力</p>
-                <p className="text-xs text-muted-foreground">SMSで認証コードを送信します</p>
+                <p className="font-bold text-[hsl(var(--dark-foreground))]">Enter Phone Number</p>
+                <p className="text-xs text-[hsl(var(--dark-muted))]">We'll send a verification code via SMS</p>
               </div>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="phone">携帯電話番号</Label>
+                <Label htmlFor="phone" className="text-[hsl(var(--dark-foreground))]">Mobile Phone Number</Label>
                 <Input
                   id="phone"
                   type="tel"
                   placeholder="090-1234-5678"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(formatPhoneNumber(e.target.value))}
-                  className={error ? "border-destructive" : ""}
+                  className={cn(
+                    "bg-[hsl(var(--dark-surface))] border-[hsl(var(--dark-border))] text-[hsl(var(--dark-foreground))]",
+                    error && "border-[hsl(var(--dark-neon-accent))]"
+                  )}
                 />
                 {error && (
-                  <p className="text-xs text-destructive">{error}</p>
+                  <p className="text-xs text-[hsl(var(--dark-neon-accent))]">{error}</p>
                 )}
               </div>
 
               <Button 
                 onClick={handleSendCode} 
-                className="w-full"
+                className="w-full bg-[hsl(var(--dark-neon-primary))] text-[hsl(var(--dark-background))] hover:bg-[hsl(var(--dark-neon-primary)/0.9)]"
                 disabled={isLoading}
               >
-                {isLoading ? "送信中..." : "認証コードを送信"}
+                {isLoading ? "Sending..." : "Send Verification Code"}
               </Button>
             </div>
 
-            <p className="text-xs text-muted-foreground mt-4 text-center">
-              入力された電話番号にSMSで6桁の認証コードを送信します
+            <p className="text-xs text-[hsl(var(--dark-muted))] mt-4 text-center">
+              A 6-digit verification code will be sent to your phone via SMS
             </p>
           </Card>
         ) : (
-          <Card className="p-6">
+          <Card className={cn(
+            "p-6",
+            "bg-[hsl(var(--dark-surface-elevated))] border-[hsl(var(--dark-border))]"
+          )}>
             <div className="flex items-center gap-3 mb-6">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Shield className="h-5 w-5 text-primary" />
+              <div className="h-10 w-10 rounded-full bg-[hsl(var(--dark-neon-gold)/0.2)] flex items-center justify-center">
+                <Shield className="h-5 w-5 text-[hsl(var(--dark-neon-gold))]" />
               </div>
               <div>
-                <p className="font-bold text-foreground">認証コードを入力</p>
-                <p className="text-xs text-muted-foreground">{phoneNumber} に送信しました</p>
+                <p className="font-bold text-[hsl(var(--dark-foreground))]">Enter Verification Code</p>
+                <p className="text-xs text-[hsl(var(--dark-muted))]">Sent to {phoneNumber}</p>
               </div>
             </div>
 
@@ -162,45 +150,46 @@ const LightThemeSmsVerification = () => {
                     setError("");
                   }}
                 >
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
+                  <InputOTPGroup className="gap-2">
+                    {[0, 1, 2, 3, 4, 5].map((index) => (
+                      <InputOTPSlot 
+                        key={index}
+                        index={index} 
+                        className="bg-[hsl(var(--dark-surface))] border-[hsl(var(--dark-border))] text-[hsl(var(--dark-foreground))]"
+                      />
+                    ))}
                   </InputOTPGroup>
                 </InputOTP>
               </div>
 
               {error && (
-                <p className="text-xs text-destructive text-center">{error}</p>
+                <p className="text-xs text-[hsl(var(--dark-neon-accent))] text-center">{error}</p>
               )}
 
               <Button 
                 onClick={handleVerifyCode} 
-                className="w-full"
+                className="w-full bg-[hsl(var(--dark-neon-primary))] text-[hsl(var(--dark-background))] hover:bg-[hsl(var(--dark-neon-primary)/0.9)]"
                 disabled={isLoading || verificationCode.length !== 6}
               >
-                {isLoading ? "確認中..." : "認証する"}
+                {isLoading ? "Verifying..." : "Verify"}
               </Button>
 
               <div className="text-center">
                 <Button 
                   variant="link" 
-                  className="text-sm text-muted-foreground"
+                  className="text-sm text-[hsl(var(--dark-muted))] hover:text-[hsl(var(--dark-neon-primary))]"
                   onClick={handleSendCode}
                   disabled={isLoading}
                 >
-                  認証コードを再送信
+                  Resend verification code
                 </Button>
               </div>
             </div>
           </Card>
         )}
       </div>
-    </MainLayout>
+    </DarkThemeLayout>
   );
 };
 
-export default SmsVerification;
+export default DarkThemeSmsVerification;

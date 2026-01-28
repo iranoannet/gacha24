@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Ticket, AlertCircle, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { useTenant } from "@/hooks/useTenant";
+import DarkThemeCoupon from "./DarkThemeCoupon";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +19,23 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Tenants that use dark theme
+const DARK_THEME_TENANTS = ["get24", "get"];
+
 const Coupon = () => {
+  const { tenantSlug } = useTenant();
+  
+  // Check if this tenant uses dark theme
+  const useDarkTheme = tenantSlug && DARK_THEME_TENANTS.includes(tenantSlug);
+  
+  if (useDarkTheme) {
+    return <DarkThemeCoupon />;
+  }
+  
+  return <LightThemeCoupon />;
+};
+
+const LightThemeCoupon = () => {
   const navigate = useNavigate();
   const [couponCode, setCouponCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
