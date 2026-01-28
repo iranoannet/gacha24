@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import DarkThemeSidebar from "./DarkThemeSidebar";
 import DarkThemeHeader from "./DarkThemeHeader";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -6,17 +6,33 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 interface DarkThemeLayoutProps {
   children: ReactNode;
   showFooter?: boolean;
+  selectedCategory?: string;
+  selectedTag?: string;
+  onCategoryChange?: (category: string) => void;
+  onTagChange?: (tag: string | null) => void;
 }
 
 /**
  * Dark theme layout with left sidebar for specific tenants (e.g., get24)
  * Inspired by wikibet.com design
  */
-const DarkThemeLayout = ({ children, showFooter = true }: DarkThemeLayoutProps) => {
+const DarkThemeLayout = ({ 
+  children, 
+  showFooter = true,
+  selectedCategory = "all",
+  selectedTag,
+  onCategoryChange,
+  onTagChange,
+}: DarkThemeLayoutProps) => {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full dark-theme">
-        <DarkThemeSidebar />
+        <DarkThemeSidebar
+          selectedCategory={selectedCategory}
+          selectedTag={selectedTag}
+          onCategoryChange={onCategoryChange}
+          onTagChange={onTagChange}
+        />
         <div className="flex-1 flex flex-col">
           <DarkThemeHeader />
           <main className="flex-1 bg-[hsl(var(--dark-background))]">

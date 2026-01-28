@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Sparkles, Gift, History, MessageSquare, User, Home, CreditCard, HelpCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Sparkles, Gift, History, MessageSquare, User, CreditCard, HelpCircle, ChevronLeft, ChevronRight, Flame, Clock } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
 import {
   Sidebar,
@@ -15,20 +15,43 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-const mainNavItems = [
-  { path: "/", icon: Sparkles, label: "オリパガチャ" },
-  { path: "/inventory", icon: Gift, label: "獲得商品" },
-  { path: "/history", icon: History, label: "当選履歴" },
-  { path: "/reports", icon: MessageSquare, label: "当選報告" },
+// Categories matching the database enum
+const categories = [
+  { id: "all", label: "All", icon: Sparkles },
+  { id: "pokemon", label: "Pokemon", icon: Sparkles },
+  { id: "yugioh", label: "Yu-Gi-Oh!", icon: Sparkles },
+  { id: "onepiece", label: "One Piece", icon: Sparkles },
+  { id: "weiss", label: "Weiss Schwarz", icon: Sparkles },
+];
+
+// Display tags for filtering
+const displayTags = [
+  { id: "new_arrivals", label: "New Arrivals", icon: Clock },
+  { id: "hot_items", label: "Hot Items", icon: Flame },
 ];
 
 const accountNavItems = [
-  { path: "/mypage", icon: User, label: "マイページ" },
-  { path: "/points", icon: CreditCard, label: "ポイント購入" },
-  { path: "/faq", icon: HelpCircle, label: "よくある質問" },
+  { path: "/inventory", icon: Gift, label: "Inventory" },
+  { path: "/history", icon: History, label: "History" },
+  { path: "/reports", icon: MessageSquare, label: "Reports" },
+  { path: "/mypage", icon: User, label: "My Page" },
+  { path: "/points", icon: CreditCard, label: "Buy Points" },
+  { path: "/faq", icon: HelpCircle, label: "FAQ" },
 ];
 
-const DarkThemeSidebar = () => {
+interface DarkThemeSidebarProps {
+  selectedCategory?: string;
+  selectedTag?: string;
+  onCategoryChange?: (category: string) => void;
+  onTagChange?: (tag: string | null) => void;
+}
+
+const DarkThemeSidebar = ({ 
+  selectedCategory = "all",
+  selectedTag,
+  onCategoryChange,
+  onTagChange,
+}: DarkThemeSidebarProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { tenant, tenantSlug } = useTenant();
@@ -47,6 +70,27 @@ const DarkThemeSidebar = () => {
 
   const handleNavigation = (path: string) => {
     navigate(basePath + path);
+  };
+
+  const handleCategoryClick = (categoryId: string) => {
+    onCategoryChange?.(categoryId);
+    // Navigate to home if not already there
+    if (!isActive("/")) {
+      handleNavigation("/");
+    }
+  };
+
+  const handleTagClick = (tagId: string) => {
+    // Toggle tag selection
+    if (selectedTag === tagId) {
+      onTagChange?.(null);
+    } else {
+      onTagChange?.(tagId);
+    }
+    // Navigate to home if not already there
+    if (!isActive("/")) {
+      handleNavigation("/");
+    }
   };
 
   return (
@@ -76,38 +120,70 @@ const DarkThemeSidebar = () => {
           )}
           {!collapsed && (
             <span className="text-lg font-bold text-[hsl(var(--dark-foreground))] truncate">
-              {tenant?.name || "ガチャ"}
+              {tenant?.name || "Gacha"}
             </span>
           )}
         </button>
       </div>
 
       <SidebarContent className="bg-[hsl(var(--dark-surface))]">
-        {/* Main Navigation */}
+        {/* Categories Section */}
         <SidebarGroup>
           {!collapsed && (
             <SidebarGroupLabel className="text-[hsl(var(--dark-muted))] text-xs uppercase tracking-wider px-3">
-              メニュー
+              Categories
             </SidebarGroupLabel>
           )}
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.path}>
+              {categories.map((category) => (
+                <SidebarMenuItem key={category.id}>
                   <SidebarMenuButton
-                    onClick={() => handleNavigation(item.path)}
+                    onClick={() => handleCategoryClick(category.id)}
                     className={cn(
                       "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
-                      isActive(item.path)
+                      selectedCategory === category.id && isActive("/")
                         ? "bg-[hsl(var(--dark-neon-primary)/0.15)] text-[hsl(var(--dark-neon-primary))] border-l-2 border-[hsl(var(--dark-neon-primary))]"
                         : "text-[hsl(var(--dark-foreground))] hover:bg-[hsl(var(--dark-hover))] hover:text-[hsl(var(--dark-neon-primary))]"
                     )}
                   >
-                    <item.icon className={cn(
+                    <category.icon className={cn(
                       "h-5 w-5 flex-shrink-0",
-                      isActive(item.path) && "drop-shadow-[0_0_8px_hsl(var(--dark-neon-primary))]"
+                      selectedCategory === category.id && isActive("/") && "drop-shadow-[0_0_8px_hsl(var(--dark-neon-primary))]"
                     )} />
-                    {!collapsed && <span className="font-medium">{item.label}</span>}
+                    {!collapsed && <span className="font-medium">{category.label}</span>}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Tags Section */}
+        <SidebarGroup className="mt-4">
+          {!collapsed && (
+            <SidebarGroupLabel className="text-[hsl(var(--dark-muted))] text-xs uppercase tracking-wider px-3">
+              Tags
+            </SidebarGroupLabel>
+          )}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {displayTags.map((tag) => (
+                <SidebarMenuItem key={tag.id}>
+                  <SidebarMenuButton
+                    onClick={() => handleTagClick(tag.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
+                      selectedTag === tag.id
+                        ? "bg-[hsl(var(--dark-neon-accent)/0.15)] text-[hsl(var(--dark-neon-accent))] border-l-2 border-[hsl(var(--dark-neon-accent))]"
+                        : "text-[hsl(var(--dark-foreground))] hover:bg-[hsl(var(--dark-hover))] hover:text-[hsl(var(--dark-neon-accent))]"
+                    )}
+                  >
+                    <tag.icon className={cn(
+                      "h-5 w-5 flex-shrink-0",
+                      selectedTag === tag.id && "drop-shadow-[0_0_8px_hsl(var(--dark-neon-accent))]"
+                    )} />
+                    {!collapsed && <span className="font-medium">{tag.label}</span>}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -119,7 +195,7 @@ const DarkThemeSidebar = () => {
         <SidebarGroup className="mt-4">
           {!collapsed && (
             <SidebarGroupLabel className="text-[hsl(var(--dark-muted))] text-xs uppercase tracking-wider px-3">
-              アカウント
+              Account
             </SidebarGroupLabel>
           )}
           <SidebarGroupContent>
