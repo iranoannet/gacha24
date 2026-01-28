@@ -20,7 +20,7 @@ const categories = [
     sublabel: "Cards",
     gradient: "from-amber-400 via-yellow-500 to-orange-500",
     image: categoryPokemon,
-    imageStyle: "object-contain scale-110 brightness-[0.3] contrast-125 saturate-0 mix-blend-multiply"
+    imageStyle: "object-contain scale-110"
   },
   { 
     id: "yugioh", 
