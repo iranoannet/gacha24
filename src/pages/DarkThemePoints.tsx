@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Coins } from "lucide-react";
+import { ArrowLeft, Coins, TestTube2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
 import DarkThemeLayout from "@/components/layout/DarkThemeLayout";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 
 const pointsOptions = [
   { points: 500, price: 500, bonus: 0 },
@@ -37,31 +38,42 @@ const paymentMethods = [
   { id: "paidy", name: "Pay Later (Paidy)", icons: ["Paidy"] },
 ];
 
+// Check if we're in development/preview mode
+const isDemoMode = () => {
+  const hostname = window.location.hostname;
+  return hostname.includes('localhost') || 
+         hostname.includes('lovableproject.com') || 
+         hostname.includes('lovable.app');
+};
+
 const DarkThemePoints = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { tenantSlug, tenant } = useTenant();
   const basePath = tenantSlug ? `/${tenantSlug}` : "";
+  const queryClient = useQueryClient();
   const [selectedPoints, setSelectedPoints] = useState<number | null>(null);
   const [selectedPayment, setSelectedPayment] = useState("credit_card");
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvc, setCvc] = useState("");
   const [cardName, setCardName] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: profile } = useQuery({
     queryKey: ["user-profile", user?.id, tenant?.id],
     queryFn: async () => {
-      if (!user) return null;
+      if (!user || !tenant) return null;
       const { data, error } = await supabase
         .from("profiles")
         .select("points_balance")
         .eq("user_id", user.id)
-        .single();
+        .eq("tenant_id", tenant.id)
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: !!user,
+    enabled: !!user && !!tenant,
   });
 
   const currentBalance = profile?.points_balance ?? 0;
@@ -69,6 +81,56 @@ const DarkThemePoints = () => {
   const totalPoints = selectedOption
     ? selectedOption.points + selectedOption.bonus
     : 0;
+
+  const handleDemoPurchase = async () => {
+    if (!user || !tenant || !selectedOption) return;
+
+    setIsProcessing(true);
+    try {
+      // 1. Add points to profile
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ points_balance: currentBalance + selectedOption.points })
+        .eq("user_id", user.id)
+        .eq("tenant_id", tenant.id);
+
+      if (updateError) throw updateError;
+
+      // 2. Record payment
+      const { error: paymentError } = await supabase
+        .from("payments")
+        .insert({
+          user_id: user.id,
+          tenant_id: tenant.id,
+          amount: selectedOption.price,
+          points_added: selectedOption.points,
+          payment_method: selectedPayment,
+          status: "completed",
+        });
+
+      if (paymentError) throw paymentError;
+
+      // Refresh profile data
+      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
+      queryClient.invalidateQueries({ queryKey: ["header-points"] });
+
+      toast({
+        title: "Demo Purchase Complete!",
+        description: `${selectedOption.points.toLocaleString()} points have been added to your account.`,
+      });
+
+      setSelectedPoints(null);
+    } catch (error) {
+      console.error("Demo purchase error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process demo purchase. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   // Point selection screen
   if (!selectedPoints) {
@@ -254,9 +316,30 @@ const DarkThemePoints = () => {
         )}
 
         {/* Purchase Button */}
-        <Button className="w-full h-12 text-lg font-bold bg-[hsl(var(--dark-neon-primary))] text-[hsl(var(--dark-background))] hover:bg-[hsl(var(--dark-neon-primary)/0.9)]">
-          Purchase
-        </Button>
+        {isDemoMode() ? (
+          <div className="space-y-3">
+            <div className="p-3 bg-[hsl(var(--dark-neon-gold)/0.1)] border border-[hsl(var(--dark-neon-gold)/0.3)] rounded-lg">
+              <div className="flex items-center gap-2 text-[hsl(var(--dark-neon-gold))]">
+                <TestTube2 className="h-4 w-4" />
+                <span className="text-sm font-medium">Demo Mode</span>
+              </div>
+              <p className="text-xs text-[hsl(var(--dark-muted))] mt-1">
+                This is a test environment. Points will be added without real payment.
+              </p>
+            </div>
+            <Button 
+              onClick={handleDemoPurchase}
+              disabled={isProcessing}
+              className="w-full h-12 text-lg font-bold bg-[hsl(var(--dark-neon-gold))] text-[hsl(var(--dark-background))] hover:bg-[hsl(var(--dark-neon-gold)/0.9)]"
+            >
+              {isProcessing ? "Processing..." : `Demo Purchase (${selectedOption?.points.toLocaleString()} pts)`}
+            </Button>
+          </div>
+        ) : (
+          <Button className="w-full h-12 text-lg font-bold bg-[hsl(var(--dark-neon-primary))] text-[hsl(var(--dark-background))] hover:bg-[hsl(var(--dark-neon-primary)/0.9)]">
+            Purchase
+          </Button>
+        )}
       </div>
     </DarkThemeLayout>
   );
