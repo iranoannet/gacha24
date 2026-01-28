@@ -94,7 +94,7 @@ interface InventoryItem {
 
 const DarkThemeInventory = () => {
   const { user } = useAuth();
-  const { tenantSlug } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
   const basePath = tenantSlug ? `/${tenantSlug}` : "";
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -128,17 +128,38 @@ const DarkThemeInventory = () => {
     userProfile?.city && userProfile?.address_line1 && 
     userProfile?.last_name && userProfile?.first_name && userProfile?.phone_number;
 
-  // Fetch unselected items
+  // Fetch unselected items - filtered by current tenant
   const { data: unselectedItems, isLoading: isLoadingUnselected } = useQuery({
-    queryKey: ["inventory-unselected", user?.id],
+    queryKey: ["inventory-unselected", user?.id, tenant?.id],
     queryFn: async () => {
       if (!user) return [];
+
+      // First get gachas for the current tenant to filter slots
+      let gachaQuery = supabase
+        .from("gacha_masters")
+        .select("id, title");
+      
+      if (tenant?.id) {
+        gachaQuery = gachaQuery.eq("tenant_id", tenant.id);
+      } else {
+        gachaQuery = gachaQuery.is("tenant_id", null);
+      }
+      
+      const { data: tenantGachas, error: gachaError } = await gachaQuery;
+      if (gachaError) throw gachaError;
+      
+      // Create gacha map and get valid gacha IDs for this tenant
+      const gachaMap = new Map(tenantGachas?.map(g => [g.id, g.title]) || []);
+      const validGachaIds = [...gachaMap.keys()];
+      
+      if (validGachaIds.length === 0) return [];
 
       const { data: slots, error: slotsError } = await supabase
         .from("gacha_slots")
         .select("id, card_id, gacha_id, selection_deadline")
         .eq("user_id", user.id)
-        .eq("is_drawn", true);
+        .eq("is_drawn", true)
+        .in("gacha_id", validGachaIds);
 
       if (slotsError) throw slotsError;
       if (!slots || slots.length === 0) return [];
@@ -165,14 +186,6 @@ const DarkThemeInventory = () => {
 
       const cardsMap = new Map(cardsData?.map(c => [c.id, c]) || []);
 
-      const gachaIds = [...new Set(unselectedSlots.map(s => s.gacha_id).filter(Boolean))];
-      const { data: gachasData } = await supabase
-        .from("gacha_masters")
-        .select("id, title")
-        .in("id", gachaIds);
-
-      const gachaMap = new Map(gachasData?.map(g => [g.id, g.title]) || []);
-
       return unselectedSlots.map(slot => {
         const card = cardsMap.get(slot.card_id);
         return {
@@ -196,19 +209,28 @@ const DarkThemeInventory = () => {
     enabled: !!user,
   });
 
-  // Fetch pending items
+  // Fetch pending items - filtered by current tenant
   const { data: pendingItems, isLoading: isLoadingPending } = useQuery({
-    queryKey: ["inventory-pending", user?.id],
+    queryKey: ["inventory-pending", user?.id, tenant?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
+      // Build query with tenant filter
+      let query = supabase
         .from("inventory_actions")
         .select("*, slot_id")
         .eq("user_id", user.id)
         .eq("action_type", "shipping")
         .in("status", ["pending", "processing"])
         .order("requested_at", { ascending: false });
+      
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      } else {
+        query = query.is("tenant_id", null);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       if (!data || data.length === 0) return [];
@@ -260,19 +282,28 @@ const DarkThemeInventory = () => {
     enabled: !!user,
   });
 
-  // Fetch shipped items
+  // Fetch shipped items - filtered by current tenant
   const { data: shippedItems, isLoading: isLoadingShipped } = useQuery({
-    queryKey: ["inventory-shipped", user?.id],
+    queryKey: ["inventory-shipped", user?.id, tenant?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
+      // Build query with tenant filter
+      let query = supabase
         .from("inventory_actions")
         .select("*, slot_id")
         .eq("user_id", user.id)
         .eq("action_type", "shipping")
         .eq("status", "shipped")
         .order("processed_at", { ascending: false });
+      
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      } else {
+        query = query.is("tenant_id", null);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       if (!data || data.length === 0) return [];

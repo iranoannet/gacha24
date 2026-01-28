@@ -110,6 +110,7 @@ const Inventory = () => {
 
 const LightThemeInventory = () => {
   const { user } = useAuth();
+  const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showAddressDialog, setShowAddressDialog] = useState(false);
@@ -144,8 +145,9 @@ const LightThemeInventory = () => {
     userProfile?.last_name && userProfile?.first_name && userProfile?.phone_number;
 
   // ユーザーの当選スロット（inventory_actionに登録されていないもの = 未選択）を取得
+  // テナントでフィルタリング
   const { data: unselectedItems, isLoading: isLoadingUnselected, error: unselectedError } = useQuery({
-    queryKey: ["inventory-unselected", user?.id],
+    queryKey: ["inventory-unselected", user?.id, tenant?.id],
     queryFn: async () => {
       if (!user) {
         console.log("[Inventory] No user, returning empty");
@@ -154,21 +156,39 @@ const LightThemeInventory = () => {
 
       console.log("[Inventory] ====== START FETCH ======");
       console.log("[Inventory] User ID:", user.id);
-      console.log("[Inventory] User Email:", user.email);
-      console.log("[Inventory] User Agent:", navigator.userAgent);
-      console.log("[Inventory] Is Mobile:", /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+      console.log("[Inventory] Tenant ID:", tenant?.id);
 
-      // 当選したスロットを取得（JOINを使わずシンプルに）
+      // まず現在のテナントのガチャを取得
+      let gachaQuery = supabase
+        .from("gacha_masters")
+        .select("id, title");
+      
+      if (tenant?.id) {
+        gachaQuery = gachaQuery.eq("tenant_id", tenant.id);
+      } else {
+        gachaQuery = gachaQuery.is("tenant_id", null);
+      }
+      
+      const { data: tenantGachas, error: gachaError } = await gachaQuery;
+      if (gachaError) throw gachaError;
+      
+      // ガチャマップと有効なガチャIDを作成
+      const gachaMap = new Map(tenantGachas?.map(g => [g.id, g.title]) || []);
+      const validGachaIds = [...gachaMap.keys()];
+      
+      if (validGachaIds.length === 0) return [];
+
+      // 当選したスロットを取得（テナントのガチャでフィルタ）
       const { data: slots, error: slotsError } = await supabase
         .from("gacha_slots")
         .select("id, card_id, gacha_id, selection_deadline")
         .eq("user_id", user.id)
-        .eq("is_drawn", true);
+        .eq("is_drawn", true)
+        .in("gacha_id", validGachaIds);
 
       console.log("[Inventory] Slots query result:");
       console.log("[Inventory] - Error:", slotsError);
       console.log("[Inventory] - Count:", slots?.length ?? 0);
-      console.log("[Inventory] - Data:", JSON.stringify(slots?.slice(0, 3)));
 
       if (slotsError) {
         console.error("[Inventory] Slots error:", slotsError);
@@ -202,15 +222,6 @@ const LightThemeInventory = () => {
 
       const cardsMap = new Map(cardsData?.map(c => [c.id, c]) || []);
 
-      // ガチャタイトルを取得
-      const gachaIds = [...new Set(unselectedSlots.map(s => s.gacha_id).filter(Boolean))];
-      const { data: gachasData } = await supabase
-        .from("gacha_masters")
-        .select("id, title")
-        .in("id", gachaIds);
-
-      const gachaMap = new Map(gachasData?.map(g => [g.id, g.title]) || []);
-
       // 未選択のアイテムをマッピング
       const unselected = unselectedSlots.map(slot => {
         const card = cardsMap.get(slot.card_id);
@@ -237,19 +248,28 @@ const LightThemeInventory = () => {
     enabled: !!user,
   });
 
-  // 発送待ちのアイテムを取得
+  // 発送待ちのアイテムを取得（テナントでフィルタ）
   const { data: pendingItems, isLoading: isLoadingPending } = useQuery({
-    queryKey: ["inventory-pending", user?.id],
+    queryKey: ["inventory-pending", user?.id, tenant?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
+      // テナントフィルタ付きでクエリ
+      let query = supabase
         .from("inventory_actions")
         .select("*, slot_id")
         .eq("user_id", user.id)
         .eq("action_type", "shipping")
         .in("status", ["pending", "processing"])
         .order("requested_at", { ascending: false });
+      
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      } else {
+        query = query.is("tenant_id", null);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       if (!data || data.length === 0) return [];
@@ -306,19 +326,28 @@ const LightThemeInventory = () => {
     enabled: !!user,
   });
 
-  // 発送済みのアイテムを取得
+  // 発送済みのアイテムを取得（テナントでフィルタ）
   const { data: shippedItems, isLoading: isLoadingShipped } = useQuery({
-    queryKey: ["inventory-shipped", user?.id],
+    queryKey: ["inventory-shipped", user?.id, tenant?.id],
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
+      // テナントフィルタ付きでクエリ
+      let query = supabase
         .from("inventory_actions")
         .select("*, slot_id")
         .eq("user_id", user.id)
         .eq("action_type", "shipping")
         .eq("status", "shipped")
         .order("processed_at", { ascending: false });
+      
+      if (tenant?.id) {
+        query = query.eq("tenant_id", tenant.id);
+      } else {
+        query = query.is("tenant_id", null);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       if (!data || data.length === 0) return [];
