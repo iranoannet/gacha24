@@ -158,8 +158,8 @@ const DarkThemeSidebar = ({
       </SidebarContent>
 
       {/* Collapse Toggle */}
-      <div className="mt-auto p-2 border-t border-[hsl(var(--dark-border))]">
-        <SidebarTrigger className="w-full flex items-center justify-center p-2 rounded-lg text-[hsl(var(--dark-muted))] hover:bg-[hsl(var(--dark-hover))] hover:text-[hsl(var(--dark-foreground))] transition-colors">
+      <div className="mt-auto p-2 border-t border-[hsl(var(--dark-border))] bg-[hsl(var(--dark-surface))]">
+        <SidebarTrigger className="w-full flex items-center justify-center p-2 rounded-lg text-[hsl(var(--dark-muted))] hover:bg-[hsl(var(--dark-hover))] hover:text-[hsl(var(--dark-foreground))] transition-colors bg-transparent">
           {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
         </SidebarTrigger>
       </div>
