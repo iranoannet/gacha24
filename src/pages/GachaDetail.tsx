@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
 import { GachaResultModal } from "@/components/gacha/GachaResultModal";
 import { GachaConfirmDialog } from "@/components/gacha/GachaConfirmDialog";
 import { 
@@ -21,7 +22,11 @@ import {
   type ParticleStyle,
 } from "@/components/gacha/GachaAnimationSystem";
 import { CardPackAnimation } from "@/components/gacha/CardPackAnimation";
+import DarkThemeGachaDetail from "./DarkThemeGachaDetail";
 import type { Database } from "@/integrations/supabase/types";
+
+// Tenants that use dark theme
+const DARK_THEME_TENANTS = ["get24", "get"];
 
 type GachaMaster = Database["public"]["Tables"]["gacha_masters"]["Row"];
 type CardPublic = Database["public"]["Views"]["cards_public"]["Row"];
@@ -112,6 +117,22 @@ const PrizeCard = ({ card, compact = false }: { card: GroupedCard; compact?: boo
 };
 
 const GachaDetail = () => {
+  const { tenantSlug } = useTenant();
+  
+  // Check if this tenant uses dark theme
+  const useDarkTheme = tenantSlug && DARK_THEME_TENANTS.includes(tenantSlug);
+  
+  // If dark theme tenant, render the dark theme version
+  if (useDarkTheme) {
+    return <DarkThemeGachaDetail />;
+  }
+  
+  // Default light theme version
+  return <LightThemeGachaDetail />;
+};
+
+// Light theme gacha detail component  
+const LightThemeGachaDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
