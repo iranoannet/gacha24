@@ -2,6 +2,7 @@ import { useState } from "react";
 import MainLayout from "@/components/layout/MainLayout";
 import HeroBanner from "@/components/home/HeroBanner";
 import DarkThemeHeroBanner from "@/components/home/DarkThemeHeroBanner";
+import DarkThemeCategorySection from "@/components/home/DarkThemeCategorySection";
 import CategoryTabs from "@/components/home/CategoryTabs";
 import GachaCard from "@/components/gacha/GachaCard";
 import DarkThemeGachaCard from "@/components/gacha/DarkThemeGachaCard";
@@ -10,7 +11,6 @@ import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTenantGachas } from "@/hooks/useTenantData";
 import { useTenant } from "@/hooks/useTenant";
-import { cn } from "@/lib/utils";
 
 // Tenants that use the dark theme
 const DARK_THEME_TENANTS = ["get24", "get"];
@@ -71,16 +71,20 @@ const Index = () => {
   if (useDarkTheme) {
     return (
       <DarkThemeLayout
-        selectedCategory={selectedCategory}
         selectedTag={selectedTag ?? undefined}
-        onCategoryChange={handleCategoryChange}
         onTagChange={handleTagChange}
       >
         {/* Hero Banner */}
         <DarkThemeHeroBanner />
 
+        {/* Category Section - Horizontal Cards */}
+        <DarkThemeCategorySection 
+          selectedCategory={selectedCategory}
+          onCategoryChange={handleCategoryChange}
+        />
+
         {/* Section Header */}
-        <div className="bg-[hsl(var(--dark-background))] pt-6 pb-4">
+        <div className="bg-[hsl(var(--dark-background))] pt-2 pb-4">
           <div className="container px-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[hsl(var(--dark-foreground))]">
