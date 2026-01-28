@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
 import DarkThemeSidebar from "./DarkThemeSidebar";
 import DarkThemeHeader from "./DarkThemeHeader";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -6,9 +6,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 interface DarkThemeLayoutProps {
   children: ReactNode;
   showFooter?: boolean;
-  selectedCategory?: string;
   selectedTag?: string;
-  onCategoryChange?: (category: string) => void;
   onTagChange?: (tag: string | null) => void;
 }
 
@@ -19,18 +17,14 @@ interface DarkThemeLayoutProps {
 const DarkThemeLayout = ({ 
   children, 
   showFooter = true,
-  selectedCategory = "all",
   selectedTag,
-  onCategoryChange,
   onTagChange,
 }: DarkThemeLayoutProps) => {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full dark-theme">
         <DarkThemeSidebar
-          selectedCategory={selectedCategory}
           selectedTag={selectedTag}
-          onCategoryChange={onCategoryChange}
           onTagChange={onTagChange}
         />
         <div className="flex-1 flex flex-col">
