@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Sparkles, Gift, History, MessageSquare, User, CreditCard, HelpCircle, ChevronLeft, ChevronRight, Flame, Clock, Home } from "lucide-react";
+import { Sparkles, Gift, History, MessageSquare, User, CreditCard, HelpCircle, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { useTenant } from "@/hooks/useTenant";
 import {
   Sidebar,
@@ -15,12 +15,6 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-// Display tags for filtering
-const displayTags = [
-  { id: "new_arrivals", label: "New Arrivals", icon: Clock },
-  { id: "hot_items", label: "Hot Items", icon: Flame },
-];
-
 const mainNavItems = [
   { path: "/", icon: Home, label: "Home" },
   { path: "/inventory", icon: Gift, label: "Inventory" },
@@ -35,6 +29,7 @@ const accountNavItems = [
 ];
 
 interface DarkThemeSidebarProps {
+  // Props kept for compatibility, but tags are no longer displayed
   selectedTag?: string;
   onTagChange?: (tag: string | null) => void;
 }
@@ -61,19 +56,6 @@ const DarkThemeSidebar = ({
 
   const handleNavigation = (path: string) => {
     navigate(basePath + path);
-  };
-
-  const handleTagClick = (tagId: string) => {
-    // Toggle tag selection
-    if (selectedTag === tagId) {
-      onTagChange?.(null);
-    } else {
-      onTagChange?.(tagId);
-    }
-    // Navigate to home if not already there
-    if (!isActive("/")) {
-      handleNavigation("/");
-    }
   };
 
   return (
@@ -135,38 +117,6 @@ const DarkThemeSidebar = ({
                       isActive(item.path) && "drop-shadow-[0_0_8px_hsl(var(--dark-neon-primary))]"
                     )} />
                     {!collapsed && <span className="font-medium">{item.label}</span>}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Tags Section */}
-        <SidebarGroup className="mt-4">
-          {!collapsed && (
-            <SidebarGroupLabel className="text-[hsl(var(--dark-muted))] text-xs uppercase tracking-wider px-3">
-              Tags
-            </SidebarGroupLabel>
-          )}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {displayTags.map((tag) => (
-                <SidebarMenuItem key={tag.id}>
-                  <SidebarMenuButton
-                    onClick={() => handleTagClick(tag.id)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all",
-                      selectedTag === tag.id
-                        ? "bg-[hsl(var(--dark-neon-accent)/0.15)] text-[hsl(var(--dark-neon-accent))] border-l-2 border-[hsl(var(--dark-neon-accent))]"
-                        : "text-[hsl(var(--dark-foreground))] hover:bg-[hsl(var(--dark-hover))] hover:text-[hsl(var(--dark-neon-accent))]"
-                    )}
-                  >
-                    <tag.icon className={cn(
-                      "h-5 w-5 flex-shrink-0",
-                      selectedTag === tag.id && "drop-shadow-[0_0_8px_hsl(var(--dark-neon-accent))]"
-                    )} />
-                    {!collapsed && <span className="font-medium">{tag.label}</span>}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

@@ -11,10 +11,8 @@ import { useTenant } from "@/hooks/useTenant";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import DarkThemePoints from "./DarkThemePoints";
-
-// Tenants that use dark theme
-const DARK_THEME_TENANTS = ["get24", "get"];
+import DarkThemeLayout from "@/components/layout/DarkThemeLayout";
+import { cn } from "@/lib/utils";
 
 const pointsOptions = [
   { points: 500, price: 500, bonus: 0 },
@@ -31,30 +29,19 @@ const pointsOptions = [
 ];
 
 const paymentMethods = [
-  { id: "credit_card", name: "クレジットカード", icons: ["VISA", "MC", "JCB", "AMEX"] },
+  { id: "credit_card", name: "Credit Card", icons: ["VISA", "MC", "JCB", "AMEX"] },
   { id: "apple_pay", name: "Apple Pay", icons: ["ApplePay"] },
-  { id: "bank_transfer", name: "銀行振込", icons: [] },
-  { id: "merpay", name: "メルペイ", icons: ["MerPay"] },
+  { id: "bank_transfer", name: "Bank Transfer", icons: [] },
+  { id: "merpay", name: "MerPay", icons: ["MerPay"] },
   { id: "amazon_pay", name: "Amazon Pay", icons: ["AmazonPay"] },
-  { id: "paidy", name: "あと払い（ペイディ）", icons: ["Paidy"] },
+  { id: "paidy", name: "Pay Later (Paidy)", icons: ["Paidy"] },
 ];
 
-const Points = () => {
-  const { tenantSlug } = useTenant();
-  
-  // Check if this tenant uses dark theme
-  const useDarkTheme = tenantSlug && DARK_THEME_TENANTS.includes(tenantSlug);
-  
-  if (useDarkTheme) {
-    return <DarkThemePoints />;
-  }
-  
-  return <LightThemePoints />;
-};
-
-const LightThemePoints = () => {
+const DarkThemePoints = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { tenantSlug, tenant } = useTenant();
+  const basePath = tenantSlug ? `/${tenantSlug}` : "";
   const [selectedPoints, setSelectedPoints] = useState<number | null>(null);
   const [selectedPayment, setSelectedPayment] = useState("credit_card");
   const [cardNumber, setCardNumber] = useState("");
@@ -62,9 +49,8 @@ const LightThemePoints = () => {
   const [cvc, setCvc] = useState("");
   const [cardName, setCardName] = useState("");
 
-  // ユーザーのプロファイル取得
   const { data: profile } = useQuery({
-    queryKey: ["user-profile", user?.id],
+    queryKey: ["user-profile", user?.id, tenant?.id],
     queryFn: async () => {
       if (!user) return null;
       const { data, error } = await supabase
@@ -84,26 +70,17 @@ const LightThemePoints = () => {
     ? selectedOption.points + selectedOption.bonus
     : 0;
 
-  // ポイント選択画面
+  // Point selection screen
   if (!selectedPoints) {
     return (
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <header className="sticky top-0 z-40 bg-card border-b border-border">
-          <div className="container flex items-center justify-between h-14 px-4">
-            <button onClick={() => navigate(-1)} className="p-2 -ml-2">
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <h1 className="font-bold text-lg">ポイント購入</h1>
-            <div className="w-9" />
-          </div>
-        </header>
+      <DarkThemeLayout showFooter={false}>
+        <div className="container px-4 py-6 max-w-2xl mx-auto">
+          <h1 className="text-xl font-bold mb-6 text-[hsl(var(--dark-neon-primary))]">Buy Points</h1>
 
-        <main className="container px-4 py-6 max-w-2xl mx-auto">
           {/* Current Balance */}
-          <div className="mb-6 p-4 bg-gradient-to-r from-primary/20 to-accent/20 rounded-lg border border-primary/30">
-            <p className="text-sm text-muted-foreground mb-1">現在のポイント残高</p>
-            <p className="text-2xl font-bold text-primary">
+          <div className="mb-6 p-4 bg-gradient-to-r from-[hsl(var(--dark-neon-primary)/0.2)] to-[hsl(var(--dark-neon-secondary)/0.2)] rounded-lg border border-[hsl(var(--dark-neon-primary)/0.3)]">
+            <p className="text-sm text-[hsl(var(--dark-muted))] mb-1">Current Balance</p>
+            <p className="text-2xl font-bold text-[hsl(var(--dark-neon-primary))]">
               {currentBalance.toLocaleString()} <span className="text-sm">pt</span>
             </p>
           </div>
@@ -117,67 +94,70 @@ const LightThemePoints = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.03 }}
                 onClick={() => setSelectedPoints(option.points)}
-                className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-colors"
+                className={cn(
+                  "w-full flex items-center justify-between p-4 rounded-lg transition-all",
+                  "bg-[hsl(var(--dark-surface-elevated))] border border-[hsl(var(--dark-border))]",
+                  "hover:border-[hsl(var(--dark-neon-primary))] hover:bg-[hsl(var(--dark-neon-primary)/0.05)]"
+                )}
               >
                 <div className="flex items-center gap-3">
-                  <Coins className="h-5 w-5 text-primary" />
-                  <span className="font-bold text-lg">
+                  <Coins className="h-5 w-5 text-[hsl(var(--dark-neon-gold))]" />
+                  <span className="font-bold text-lg text-[hsl(var(--dark-foreground))]">
                     {option.points.toLocaleString()}
-                    <span className="text-sm font-normal text-muted-foreground ml-1">
-                      コイン
+                    <span className="text-sm font-normal text-[hsl(var(--dark-muted))] ml-1">
+                      coins
                     </span>
                   </span>
                 </div>
-                <span className="px-4 py-1.5 bg-primary text-primary-foreground rounded-full text-sm font-bold">
-                  {option.price.toLocaleString()}円
+                <span className="px-4 py-1.5 bg-[hsl(var(--dark-neon-primary))] text-[hsl(var(--dark-background))] rounded-full text-sm font-bold">
+                  ¥{option.price.toLocaleString()}
                 </span>
               </motion.button>
             ))}
           </div>
-        </main>
-      </div>
+        </div>
+      </DarkThemeLayout>
     );
   }
 
-  // 決済画面
+  // Payment screen
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-card border-b border-border">
-        <div className="container flex items-center justify-between h-14 px-4">
-          <button onClick={() => setSelectedPoints(null)} className="p-2 -ml-2">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <h1 className="font-bold text-lg">お支払い</h1>
-          <div className="w-9" />
-        </div>
-      </header>
+    <DarkThemeLayout showFooter={false}>
+      <div className="container px-4 py-6 max-w-2xl mx-auto space-y-6">
+        <button
+          onClick={() => setSelectedPoints(null)}
+          className="flex items-center gap-2 text-[hsl(var(--dark-muted))] hover:text-[hsl(var(--dark-foreground))] transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="text-sm">Back to point selection</span>
+        </button>
 
-      <main className="container px-4 py-6 max-w-2xl mx-auto space-y-6">
+        <h1 className="text-xl font-bold text-[hsl(var(--dark-neon-primary))]">Payment</h1>
+
         {/* Purchase Summary */}
-        <Card className="border-primary/30">
+        <Card className="bg-[hsl(var(--dark-surface-elevated))] border-[hsl(var(--dark-neon-primary)/0.3)]">
           <CardContent className="p-4 space-y-3">
-            <h2 className="font-bold text-sm text-muted-foreground">購入内容</h2>
+            <h2 className="font-bold text-sm text-[hsl(var(--dark-muted))]">Order Summary</h2>
             
             <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">支払い金額</span>
-              <span className="font-bold text-lg">{selectedOption?.price.toLocaleString()}円</span>
+              <span className="text-[hsl(var(--dark-muted))]">Payment Amount</span>
+              <span className="font-bold text-lg text-[hsl(var(--dark-foreground))]">¥{selectedOption?.price.toLocaleString()}</span>
             </div>
             
-            <div className="flex justify-between items-center text-primary">
-              <span>獲得コイン</span>
-              <span className="font-bold">{selectedOption?.points.toLocaleString()}コイン</span>
+            <div className="flex justify-between items-center text-[hsl(var(--dark-neon-primary))]">
+              <span>Coins Earned</span>
+              <span className="font-bold">{selectedOption?.points.toLocaleString()} coins</span>
             </div>
             
             {selectedOption && selectedOption.bonus > 0 && (
-              <div className="flex justify-between items-center text-sm text-muted-foreground">
-                <span>ボーナス(3%)</span>
+              <div className="flex justify-between items-center text-sm text-[hsl(var(--dark-muted))]">
+                <span>Bonus (3%)</span>
                 <span>+{selectedOption.bonus}pt</span>
               </div>
             )}
             
-            <div className="pt-2 border-t border-border flex justify-between items-center text-primary">
-              <span className="font-bold">獲得ランクポイント</span>
+            <div className="pt-2 border-t border-[hsl(var(--dark-border))] flex justify-between items-center text-[hsl(var(--dark-neon-gold))]">
+              <span className="font-bold">Rank Points Earned</span>
               <span className="font-bold text-lg">{totalPoints.toLocaleString()}pt</span>
             </div>
           </CardContent>
@@ -185,29 +165,31 @@ const LightThemePoints = () => {
 
         {/* Payment Methods */}
         <div className="space-y-3">
-          <h2 className="font-bold text-sm text-muted-foreground">お支払い方法</h2>
+          <h2 className="font-bold text-sm text-[hsl(var(--dark-muted))]">Payment Method</h2>
           
           <RadioGroup value={selectedPayment} onValueChange={setSelectedPayment}>
             {paymentMethods.map((method) => (
               <Card
                 key={method.id}
-                className={`cursor-pointer transition-colors ${
+                className={cn(
+                  "cursor-pointer transition-colors",
+                  "bg-[hsl(var(--dark-surface-elevated))]",
                   selectedPayment === method.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
-                }`}
+                    ? "border-[hsl(var(--dark-neon-primary))] bg-[hsl(var(--dark-neon-primary)/0.05)]"
+                    : "border-[hsl(var(--dark-border))] hover:border-[hsl(var(--dark-neon-primary)/0.5)]"
+                )}
                 onClick={() => setSelectedPayment(method.id)}
               >
                 <CardContent className="p-4 flex items-center gap-3">
-                  <RadioGroupItem value={method.id} id={method.id} />
-                  <Label htmlFor={method.id} className="flex-1 cursor-pointer font-medium">
+                  <RadioGroupItem value={method.id} id={method.id} className="border-[hsl(var(--dark-border))]" />
+                  <Label htmlFor={method.id} className="flex-1 cursor-pointer font-medium text-[hsl(var(--dark-foreground))]">
                     {method.name}
                   </Label>
                   <div className="flex gap-1">
                     {method.icons.map((icon) => (
                       <span
                         key={icon}
-                        className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground"
+                        className="text-[10px] px-1.5 py-0.5 bg-[hsl(var(--dark-surface))] rounded text-[hsl(var(--dark-muted))]"
                       >
                         {icon}
                       </span>
@@ -221,50 +203,50 @@ const LightThemePoints = () => {
 
         {/* Credit Card Form */}
         {selectedPayment === "credit_card" && (
-          <Card className="border-primary/30">
+          <Card className="bg-[hsl(var(--dark-surface-elevated))] border-[hsl(var(--dark-neon-primary)/0.3)]">
             <CardContent className="p-4 space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="cardNumber">カード番号</Label>
+                <Label htmlFor="cardNumber" className="text-[hsl(var(--dark-foreground))]">Card Number</Label>
                 <Input
                   id="cardNumber"
                   placeholder="1234 1234 1234 1234"
                   value={cardNumber}
                   onChange={(e) => setCardNumber(e.target.value)}
-                  className="bg-muted/50"
+                  className="bg-[hsl(var(--dark-surface))] border-[hsl(var(--dark-border))] text-[hsl(var(--dark-foreground))]"
                 />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="expiry">有効期限</Label>
+                  <Label htmlFor="expiry" className="text-[hsl(var(--dark-foreground))]">Expiry Date</Label>
                   <Input
                     id="expiry"
-                    placeholder="月 / 年"
+                    placeholder="MM / YY"
                     value={expiry}
                     onChange={(e) => setExpiry(e.target.value)}
-                    className="bg-muted/50"
+                    className="bg-[hsl(var(--dark-surface))] border-[hsl(var(--dark-border))] text-[hsl(var(--dark-foreground))]"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="cvc">セキュリティコード</Label>
+                  <Label htmlFor="cvc" className="text-[hsl(var(--dark-foreground))]">Security Code</Label>
                   <Input
                     id="cvc"
-                    placeholder="数字3~4桁"
+                    placeholder="CVC"
                     value={cvc}
                     onChange={(e) => setCvc(e.target.value)}
-                    className="bg-muted/50"
+                    className="bg-[hsl(var(--dark-surface))] border-[hsl(var(--dark-border))] text-[hsl(var(--dark-foreground))]"
                   />
                 </div>
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="cardName">名義人</Label>
+                <Label htmlFor="cardName" className="text-[hsl(var(--dark-foreground))]">Cardholder Name</Label>
                 <Input
                   id="cardName"
                   placeholder="TARO YAMADA"
                   value={cardName}
                   onChange={(e) => setCardName(e.target.value)}
-                  className="bg-muted/50"
+                  className="bg-[hsl(var(--dark-surface))] border-[hsl(var(--dark-border))] text-[hsl(var(--dark-foreground))]"
                 />
               </div>
             </CardContent>
@@ -272,12 +254,12 @@ const LightThemePoints = () => {
         )}
 
         {/* Purchase Button */}
-        <Button className="w-full h-12 btn-gacha text-lg font-bold">
-          購入する
+        <Button className="w-full h-12 text-lg font-bold bg-[hsl(var(--dark-neon-primary))] text-[hsl(var(--dark-background))] hover:bg-[hsl(var(--dark-neon-primary)/0.9)]">
+          Purchase
         </Button>
-      </main>
-    </div>
+      </div>
+    </DarkThemeLayout>
   );
 };
 
-export default Points;
+export default DarkThemePoints;
