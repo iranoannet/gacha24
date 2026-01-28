@@ -164,7 +164,7 @@ const DarkThemeGachaDetail = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { tenantSlug } = useTenant();
+  const { tenantSlug, tenant } = useTenant();
   const basePath = tenantSlug ? `/${tenantSlug}` : "";
   
   const [isPlaying, setIsPlaying] = useState(false);
@@ -220,19 +220,22 @@ const DarkThemeGachaDetail = () => {
     enabled: !!id,
   });
 
-  // Fetch user points balance
+  // Fetch user's tenant-specific profile (points balance)
+  
   const { data: profile } = useQuery({
-    queryKey: ["user-profile", user?.id],
+    queryKey: ["user-profile", user?.id, tenant?.id],
     queryFn: async () => {
+      if (!user || !tenant) return null;
       const { data, error } = await supabase
         .from("profiles")
         .select("points_balance")
-        .eq("user_id", user!.id)
-        .single();
+        .eq("user_id", user.id)
+        .eq("tenant_id", tenant.id)
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !!tenant?.id,
   });
 
   // Group cards by name and tier
