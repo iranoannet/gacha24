@@ -358,7 +358,7 @@ const DarkThemeGachaDetail = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[hsl(var(--dark-background))] flex items-center justify-center">
+      <div className="dark-theme min-h-screen bg-[hsl(var(--dark-background))] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-[hsl(var(--dark-neon-primary))]" />
       </div>
     );
@@ -366,7 +366,7 @@ const DarkThemeGachaDetail = () => {
 
   if (!gacha) {
     return (
-      <div className="min-h-screen bg-[hsl(var(--dark-background))] flex items-center justify-center">
+      <div className="dark-theme min-h-screen bg-[hsl(var(--dark-background))] flex items-center justify-center">
         <div className="text-center">
           <p className="text-[hsl(var(--dark-muted))] mb-4">Gacha not found</p>
           <Button 
@@ -435,7 +435,7 @@ const DarkThemeGachaDetail = () => {
   };
 
   return (
-    <>
+    <div className="dark-theme">
       <div className="min-h-screen bg-[hsl(var(--dark-background))] pb-32">
         {/* Header */}
         <header className="sticky top-0 z-50 bg-[hsl(var(--dark-surface)/0.95)] backdrop-blur border-b border-[hsl(var(--dark-border))]">
@@ -659,7 +659,7 @@ const DarkThemeGachaDetail = () => {
         totalCost={gachaResult?.totalCost || 0}
         newBalance={gachaResult?.newBalance || 0}
       />
-    </>
+    </div>
   );
 };
 
