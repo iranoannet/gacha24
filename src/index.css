@@ -101,6 +101,16 @@
     --dark-rarity-b: 210 100% 60%;
     --dark-rarity-c: 140 70% 50%;
     --dark-rarity-d: 220 10% 50%;
+
+    /* Override sidebar variables for dark theme */
+    --sidebar-background: 228 15% 16%;
+    --sidebar-foreground: 220 15% 95%;
+    --sidebar-primary: 160 100% 50%;
+    --sidebar-primary-foreground: 228 15% 12%;
+    --sidebar-accent: 228 15% 22%;
+    --sidebar-accent-foreground: 220 15% 95%;
+    --sidebar-border: 228 15% 25%;
+    --sidebar-ring: 160 100% 50%;
   }
 }
 
