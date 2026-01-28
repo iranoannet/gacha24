@@ -110,9 +110,9 @@ const DarkThemePoints = () => {
 
       if (paymentError) throw paymentError;
 
-      // Refresh profile data
-      queryClient.invalidateQueries({ queryKey: ["user-profile"] });
-      queryClient.invalidateQueries({ queryKey: ["header-points"] });
+      // Refresh profile data - invalidate ALL user-profile queries for this user/tenant
+      queryClient.invalidateQueries({ queryKey: ["user-profile", user.id, tenant.id] });
+      queryClient.invalidateQueries({ queryKey: ["user-profile-header", user.id, tenant.id] });
 
       toast({
         title: "Demo Purchase Complete!",
