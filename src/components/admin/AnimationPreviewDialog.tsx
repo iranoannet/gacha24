@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Play, X, RotateCcw } from "lucide-react";
 import { CardPackAnimation } from "@/components/gacha/CardPackAnimation";
 import { GachaAnimationSystem } from "@/components/gacha/GachaAnimationSystem";
+import { BeigomaBattleAnimation } from "@/components/gacha/BeigomaBattleAnimation";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface AnimationPreviewDialogProps {
-  animationType: "A" | "B";
+  animationType: "A" | "B" | "C";
   fakeSChance?: number;
 }
 
@@ -124,6 +125,7 @@ export function AnimationPreviewDialog({
   // 演出時間の目安
   const getDurationText = () => {
     if (animationType === "A") return "約6秒";
+    if (animationType === "C") return "約8.5秒";
     if (playCount === 1) return "約9秒";
     if (playCount === 10) return "約16秒";
     return "約28秒";
@@ -140,7 +142,7 @@ export function AnimationPreviewDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            演出プレビュー（{animationType === "A" ? "スロットマシン風" : "カードパック開封風"}）
+            演出プレビュー（{animationType === "A" ? "スロットマシン風" : animationType === "B" ? "カードパック開封風" : "ベーゴマ対決風"}）
           </DialogTitle>
         </DialogHeader>
 
@@ -176,6 +178,15 @@ export function AnimationPreviewDialog({
                 drawnCards={sampleCards}
                 playCount={playCount}
                 fakeSChance={fakeSChance}
+              />
+            ) : animationType === "C" ? (
+              <BeigomaBattleAnimation
+                key={animationKey}
+                isPlaying={isPlaying}
+                onComplete={handleComplete}
+                onSkip={handleComplete}
+                prizeTier={previewTier}
+                playCount={playCount}
               />
             ) : (
               <GachaAnimationSystem

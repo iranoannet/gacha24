@@ -93,7 +93,7 @@ export default function GachaManagement() {
     status: "draft" as GachaStatus,
     category: null as CardCategory | null,
     notice_text: defaultNotice,
-    animation_type: "A" as "A" | "B", // A = スロット風, B = カードパック開封風
+    animation_type: "A" as "A" | "B" | "C", // A = スロット風, B = カードパック開封風, C = ベーゴマ対決風
     fake_s_tier_chance: 15, // フェイク演出確率（0-100%）
     display_tags: [] as string[], // Display tags for homepage sections
   });
@@ -788,7 +788,7 @@ export default function GachaManagement() {
                     </div>
                     <Select
                       value={formData.animation_type}
-                      onValueChange={(value: "A" | "B") => setFormData({ ...formData, animation_type: value })}
+                      onValueChange={(value: "A" | "B" | "C") => setFormData({ ...formData, animation_type: value })}
                     >
                       <SelectTrigger className="mt-1">
                         <SelectValue />
@@ -796,12 +796,15 @@ export default function GachaManagement() {
                       <SelectContent>
                         <SelectItem value="A">A演出（スロットマシン風）</SelectItem>
                         <SelectItem value="B">B演出（カードパック開封風）</SelectItem>
+                        <SelectItem value="C">C演出（ベーゴマ対決風）</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground mt-1">
                       {formData.animation_type === "A" 
                         ? "従来のスロットマシン風の演出です" 
-                        : "カードパックが破れて中からカードが飛び出す演出です"}
+                        : formData.animation_type === "B"
+                        ? "カードパックが破れて中からカードが飛び出す演出です"
+                        : "ベーゴマが対決して勝者の色で結果を表示します（金=S, 赤=A, 黒=B, 白=ハズレ）"}
                     </p>
                   </div>
                   
@@ -1147,7 +1150,7 @@ export default function GachaManagement() {
                 </div>
                 <Select
                   value={formData.animation_type}
-                  onValueChange={(value: "A" | "B") => setFormData({ ...formData, animation_type: value })}
+                  onValueChange={(value: "A" | "B" | "C") => setFormData({ ...formData, animation_type: value })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -1155,12 +1158,15 @@ export default function GachaManagement() {
                   <SelectContent>
                     <SelectItem value="A">A演出（スロットマシン風）</SelectItem>
                     <SelectItem value="B">B演出（カードパック開封風）</SelectItem>
+                    <SelectItem value="C">C演出（ベーゴマ対決風）</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">
                   {formData.animation_type === "A" 
                     ? "従来のスロットマシン風の演出です" 
-                    : "カードパックが破れて中からカードが飛び出す演出です"}
+                    : formData.animation_type === "B"
+                    ? "カードパックが破れて中からカードが飛び出す演出です"
+                    : "ベーゴマが対決して勝者の色で結果を表示します（金=S, 赤=A, 黒=B, 白=ハズレ）"}
                 </p>
               </div>
               
