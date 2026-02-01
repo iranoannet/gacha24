@@ -503,6 +503,71 @@ export type Database = {
         }
         Relationships: []
       }
+      user_migrations: {
+        Row: {
+          address_line1: string | null
+          address_line2: string | null
+          city: string | null
+          created_at: string | null
+          display_name: string | null
+          email: string
+          first_name: string | null
+          id: string
+          is_applied: boolean | null
+          last_name: string | null
+          legacy_user_id: number | null
+          phone_number: string | null
+          points_balance: number | null
+          postal_code: string | null
+          prefecture: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          email: string
+          first_name?: string | null
+          id?: string
+          is_applied?: boolean | null
+          last_name?: string | null
+          legacy_user_id?: number | null
+          phone_number?: string | null
+          points_balance?: number | null
+          postal_code?: string | null
+          prefecture?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          email?: string
+          first_name?: string | null
+          id?: string
+          is_applied?: boolean | null
+          last_name?: string | null
+          legacy_user_id?: number | null
+          phone_number?: string | null
+          points_balance?: number | null
+          postal_code?: string | null
+          prefecture?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_migrations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
