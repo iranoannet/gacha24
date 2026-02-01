@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,26 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
-import { Upload, FileText, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, FileText, CheckCircle, AlertCircle, Users, Clock, UserCheck, RefreshCw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { useQuery } from "@tanstack/react-query";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+interface MigrationStats {
+  total: number;
+  applied: number;
+  pending: number;
+}
+
+interface MigrationRecord {
+  id: string;
+  email: string;
+  display_name: string | null;
+  points_balance: number | null;
+  is_applied: boolean | null;
+  created_at: string | null;
+}
 
 export default function UserMigration() {
   const { tenant, tenantSlug } = useTenant();
@@ -22,6 +40,53 @@ export default function UserMigration() {
     skipped?: number;
     errors?: string[];
   } | null>(null);
+
+  // Fetch migration stats
+  const { data: stats, refetch: refetchStats, isLoading: statsLoading } = useQuery({
+    queryKey: ["migration-stats", tenant?.id],
+    queryFn: async (): Promise<MigrationStats> => {
+      if (!tenant?.id) return { total: 0, applied: 0, pending: 0 };
+
+      const { data, error } = await supabase
+        .from("user_migrations")
+        .select("is_applied")
+        .eq("tenant_id", tenant.id);
+
+      if (error) throw error;
+
+      const total = data?.length || 0;
+      const applied = data?.filter(r => r.is_applied === true).length || 0;
+      const pending = total - applied;
+
+      return { total, applied, pending };
+    },
+    enabled: !!tenant?.id,
+  });
+
+  // Fetch recent migration records
+  const { data: recentRecords, refetch: refetchRecords } = useQuery({
+    queryKey: ["migration-records", tenant?.id],
+    queryFn: async (): Promise<MigrationRecord[]> => {
+      if (!tenant?.id) return [];
+
+      const { data, error } = await supabase
+        .from("user_migrations")
+        .select("id, email, display_name, points_balance, is_applied, created_at")
+        .eq("tenant_id", tenant.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenant?.id,
+  });
+
+  const handleRefresh = () => {
+    refetchStats();
+    refetchRecords();
+    toast.success("データを更新しました");
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -91,170 +156,287 @@ export default function UserMigration() {
   return (
     <AdminLayout title="ユーザー移行">
       <div className="space-y-6">
-        <p className="text-muted-foreground">
-          旧システムからユーザーデータをインポートします
-        </p>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Upload Section */}
+        {/* Stats Cards */}
+        <div className="grid gap-4 md:grid-cols-3">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5" />
-                CSVアップロード
-              </CardTitle>
-              <CardDescription>
-                CSVファイルをアップロードするか、直接データを貼り付けてください
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">総インポート数</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="csv-file">CSVファイル</Label>
-                <Input
-                  id="csv-file"
-                  type="file"
-                  accept=".csv,.txt"
-                  onChange={handleFileUpload}
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="csv-data">CSVデータ</Label>
-                <Textarea
-                  id="csv-data"
-                  placeholder={`email,points_balance,last_name,first_name,phone_number,postal_code,prefecture,city,address_line1
-test@example.com,5000,山田,太郎,090-1234-5678,123-4567,東京都,渋谷区,道玄坂1-2-3`}
-                  value={csvData}
-                  onChange={(e) => setCsvData(e.target.value)}
-                  className="mt-1 h-48 font-mono text-xs"
-                />
-              </div>
-
-              <Button
-                onClick={handleImport}
-                disabled={isLoading || !csvData.trim()}
-                className="w-full"
-              >
-                {isLoading ? "インポート中..." : "インポート実行"}
-              </Button>
+            <CardContent>
+              <div className="text-2xl font-bold">{statsLoading ? "..." : stats?.total || 0}</div>
+              <p className="text-xs text-muted-foreground">移行データ登録済み</p>
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">適用済み</CardTitle>
+              <UserCheck className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary">{statsLoading ? "..." : stats?.applied || 0}</div>
+              <p className="text-xs text-muted-foreground">ログイン完了ユーザー</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">待機中</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{statsLoading ? "..." : stats?.pending || 0}</div>
+              <p className="text-xs text-muted-foreground">未ログインユーザー</p>
+            </CardContent>
+          </Card>
+        </div>
 
-          {/* Preview & Result Section */}
-          <div className="space-y-6">
-            {/* CSV Preview */}
-            {csvData && (
+        {stats && stats.total > 0 && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>移行進捗</span>
+              <span>{stats.applied} / {stats.total} ({Math.round((stats.applied / stats.total) * 100)}%)</span>
+            </div>
+            <Progress value={(stats.applied / stats.total) * 100} className="h-2" />
+          </div>
+        )}
+
+        <Tabs defaultValue="import" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <TabsList>
+              <TabsTrigger value="import">CSVインポート</TabsTrigger>
+              <TabsTrigger value="status">移行ステータス</TabsTrigger>
+            </TabsList>
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              更新
+            </Button>
+          </div>
+
+          <TabsContent value="import" className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Upload Section */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    プレビュー
+                    <Upload className="h-5 w-5" />
+                    CSVアップロード
                   </CardTitle>
                   <CardDescription>
-                    {csvData.trim().split("\n").length - 1} 件のレコード
+                    CSVファイルをアップロードするか、直接データを貼り付けてください
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <tbody>
-                        {previewLines.map((line, i) => (
-                          <tr key={i} className={i === 0 ? "font-bold bg-muted" : ""}>
-                            {line.split(",").slice(0, 5).map((cell, j) => (
-                              <td key={j} className="px-2 py-1 border truncate max-w-[100px]">
-                                {cell}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {previewLines.length < csvData.trim().split("\n").length && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      ...他 {csvData.trim().split("\n").length - previewLines.length} 行
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Result */}
-            {result && (
-              <Card className={result.success ? "border-primary" : "border-destructive"}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    {result.success ? (
-                      <CheckCircle className="h-5 w-5 text-primary" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-destructive" />
-                    )}
-                    インポート結果
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <p className="text-2xl font-bold">{result.total_records}</p>
-                      <p className="text-xs text-muted-foreground">総件数</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-primary">{result.inserted}</p>
-                      <p className="text-xs text-muted-foreground">成功</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-accent-foreground">{result.skipped}</p>
-                      <p className="text-xs text-muted-foreground">スキップ</p>
-                    </div>
-                  </div>
-                  
-                  {result.inserted && result.total_records && (
-                    <Progress 
-                      value={(result.inserted / result.total_records) * 100} 
-                      className="h-2"
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="csv-file">CSVファイル</Label>
+                    <Input
+                      id="csv-file"
+                      type="file"
+                      accept=".csv,.txt"
+                      onChange={handleFileUpload}
+                      className="mt-1"
                     />
-                  )}
+                  </div>
 
-                  {result.errors && result.errors.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-sm font-medium text-destructive mb-2">エラー:</p>
-                      <ul className="text-xs text-destructive space-y-1">
-                        {result.errors.map((err, i) => (
-                          <li key={i}>{err}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  <div>
+                    <Label htmlFor="csv-data">CSVデータ</Label>
+                    <Textarea
+                      id="csv-data"
+                      placeholder={`email,points_balance,last_name,first_name,phone_number,postal_code,prefecture,city,address_line1
+test@example.com,5000,山田,太郎,090-1234-5678,123-4567,東京都,渋谷区,道玄坂1-2-3`}
+                      value={csvData}
+                      onChange={(e) => setCsvData(e.target.value)}
+                      className="mt-1 h-48 font-mono text-xs"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={async () => {
+                      await handleImport();
+                      refetchStats();
+                      refetchRecords();
+                    }}
+                    disabled={isLoading || !csvData.trim()}
+                    className="w-full"
+                  >
+                    {isLoading ? "インポート中..." : "インポート実行"}
+                  </Button>
                 </CardContent>
               </Card>
-            )}
 
-            {/* Instructions */}
+              {/* Preview & Result Section */}
+              <div className="space-y-6">
+                {/* CSV Preview */}
+                {csvData && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        プレビュー
+                      </CardTitle>
+                      <CardDescription>
+                        {csvData.trim().split("\n").length - 1} 件のレコード
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <tbody>
+                            {previewLines.map((line, i) => (
+                              <tr key={i} className={i === 0 ? "font-bold bg-muted" : ""}>
+                                {line.split(",").slice(0, 5).map((cell, j) => (
+                                  <td key={j} className="px-2 py-1 border truncate max-w-[100px]">
+                                    {cell}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {previewLines.length < csvData.trim().split("\n").length && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          ...他 {csvData.trim().split("\n").length - previewLines.length} 行
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Result */}
+                {result && (
+                  <Card className={result.success ? "border-primary" : "border-destructive"}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        {result.success ? (
+                          <CheckCircle className="h-5 w-5 text-primary" />
+                        ) : (
+                          <AlertCircle className="h-5 w-5 text-destructive" />
+                        )}
+                        インポート結果
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <p className="text-2xl font-bold">{result.total_records}</p>
+                          <p className="text-xs text-muted-foreground">総件数</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-primary">{result.inserted}</p>
+                          <p className="text-xs text-muted-foreground">成功</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-accent-foreground">{result.skipped}</p>
+                          <p className="text-xs text-muted-foreground">スキップ</p>
+                        </div>
+                      </div>
+                      
+                      {result.inserted && result.total_records && (
+                        <Progress 
+                          value={(result.inserted / result.total_records) * 100} 
+                          className="h-2"
+                        />
+                      )}
+
+                      {result.errors && result.errors.length > 0 && (
+                        <div className="mt-4">
+                          <p className="text-sm font-medium text-destructive mb-2">エラー:</p>
+                          <ul className="text-xs text-destructive space-y-1">
+                            {result.errors.map((err, i) => (
+                              <li key={i}>{err}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Instructions */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>CSVフォーマット</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      以下のカラムに対応しています（日本語名も可）:
+                    </p>
+                    <ul className="text-xs space-y-1 text-muted-foreground">
+                      <li><code className="bg-muted px-1">email</code> / メールアドレス（必須）</li>
+                      <li><code className="bg-muted px-1">points_balance</code> / ポイント</li>
+                      <li><code className="bg-muted px-1">last_name</code> / 姓</li>
+                      <li><code className="bg-muted px-1">first_name</code> / 名</li>
+                      <li><code className="bg-muted px-1">phone_number</code> / 電話番号</li>
+                      <li><code className="bg-muted px-1">postal_code</code> / 郵便番号</li>
+                      <li><code className="bg-muted px-1">prefecture</code> / 都道府県</li>
+                      <li><code className="bg-muted px-1">city</code> / 市区町村</li>
+                      <li><code className="bg-muted px-1">address_line1</code> / 住所1</li>
+                      <li><code className="bg-muted px-1">address_line2</code> / 住所2</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="status">
             <Card>
               <CardHeader>
-                <CardTitle>CSVフォーマット</CardTitle>
+                <CardTitle>移行レコード一覧</CardTitle>
+                <CardDescription>
+                  最新50件を表示しています
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-2">
-                  以下のカラムに対応しています（日本語名も可）:
-                </p>
-                <ul className="text-xs space-y-1 text-muted-foreground">
-                  <li><code className="bg-muted px-1">email</code> / メールアドレス（必須）</li>
-                  <li><code className="bg-muted px-1">points_balance</code> / ポイント</li>
-                  <li><code className="bg-muted px-1">last_name</code> / 姓</li>
-                  <li><code className="bg-muted px-1">first_name</code> / 名</li>
-                  <li><code className="bg-muted px-1">phone_number</code> / 電話番号</li>
-                  <li><code className="bg-muted px-1">postal_code</code> / 郵便番号</li>
-                  <li><code className="bg-muted px-1">prefecture</code> / 都道府県</li>
-                  <li><code className="bg-muted px-1">city</code> / 市区町村</li>
-                  <li><code className="bg-muted px-1">address_line1</code> / 住所1</li>
-                  <li><code className="bg-muted px-1">address_line2</code> / 住所2</li>
-                </ul>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>メールアドレス</TableHead>
+                        <TableHead>表示名</TableHead>
+                        <TableHead className="text-right">ポイント</TableHead>
+                        <TableHead className="text-center">ステータス</TableHead>
+                        <TableHead>登録日</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentRecords?.map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell className="font-mono text-sm">{record.email}</TableCell>
+                          <TableCell>{record.display_name || "-"}</TableCell>
+                          <TableCell className="text-right">{record.points_balance?.toLocaleString() || 0}</TableCell>
+                          <TableCell className="text-center">
+                            {record.is_applied ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-primary">
+                                <CheckCircle className="h-3 w-3" />
+                                適用済み
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3" />
+                                待機中
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {record.created_at ? new Date(record.created_at).toLocaleDateString("ja-JP") : "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {(!recentRecords || recentRecords.length === 0) && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                            移行データがありません
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </AdminLayout>
   );
