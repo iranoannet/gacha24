@@ -21,6 +21,7 @@ import {
   type ParticleStyle,
 } from "@/components/gacha/GachaAnimationSystem";
 import { CardPackAnimation } from "@/components/gacha/CardPackAnimation";
+import { BeigomaBattleAnimation, getBeigomaPrizeTier } from "@/components/gacha/BeigomaBattleAnimation";
 import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 
@@ -639,6 +640,14 @@ const DarkThemeGachaDetail = () => {
           drawnCards={pendingDrawnCards}
           playCount={pendingPlayCount}
           fakeSChance={gacha.fake_s_tier_chance ?? 15}
+        />
+      ) : gacha.animation_type === "C" ? (
+        <BeigomaBattleAnimation
+          isPlaying={isPlaying}
+          onComplete={handleAnimationComplete}
+          onSkip={handleAnimationComplete}
+          prizeTier={getBeigomaPrizeTier(pendingDrawnCards)}
+          playCount={pendingPlayCount}
         />
       ) : (
         <GachaAnimationSystem
