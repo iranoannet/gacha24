@@ -22,11 +22,14 @@ interface MigrationRecord {
 }
 
 // Column indices for get24 CSV format (0-indexed)
+// Format: ID, 姓, 名, ミドルネーム, ?, 郵便番号, 国/都道府県, NULL, ?, 市区町村, 住所1, 住所2, ?, ポイント, 電話, メール, ...
 const GET24_COLUMN_MAP = {
   legacy_user_id: 0,
   last_name: 1,
   first_name: 2,
+  // middle_name: 3, // Not stored in user_migrations
   postal_code: 5,
+  prefecture: 6,  // 日本 or prefecture name
   city: 9,
   address_line1: 10,
   address_line2: 11,
@@ -109,12 +112,26 @@ serve(async (req) => {
       
       console.log(`Processing ${lines.length} lines of CSV data`);
       
-      // Check if first line looks like a header (contains common header keywords)
-      const firstLine = lines[0]?.toLowerCase() || "";
-      const hasHeaders = firstLine.includes("email") || firstLine.includes("mail") || 
-                         firstLine.includes("メール") || firstLine.includes("ポイント");
+      // Check if first line looks like a header by examining the first few cells
+      // Headers are typically text labels, not numeric IDs or email addresses
+      const firstLineValues = parseCSVLine(lines[0]);
+      const firstCell = cleanValue(firstLineValues[0]) || "";
+      const secondCell = cleanValue(firstLineValues[1]) || "";
       
-      console.log(`Header detection: hasHeaders=${hasHeaders}, firstLine="${firstLine.substring(0, 50)}..."`);
+      // If first cell is a number (legacy_user_id), it's data, not a header
+      const firstCellIsNumber = /^\d+$/.test(firstCell);
+      
+      // Check if cells contain typical header keywords (but NOT email addresses)
+      const headerKeywords = ["email", "mail", "メール", "ポイント", "id", "name", "姓", "名", "電話"];
+      const cellsLookLikeHeaders = !firstCellIsNumber && 
+        headerKeywords.some(keyword => 
+          firstCell.toLowerCase().includes(keyword) || 
+          secondCell.toLowerCase().includes(keyword)
+        );
+      
+      const hasHeaders = cellsLookLikeHeaders;
+      
+      console.log(`Header detection: hasHeaders=${hasHeaders}, firstCell="${firstCell}", firstCellIsNumber=${firstCellIsNumber}`);
       
       if (hasHeaders) {
         // Parse with headers
@@ -183,6 +200,7 @@ serve(async (req) => {
             points_balance: points,
             phone_number: cleanValue(values[GET24_COLUMN_MAP.phone_number]),
             postal_code: cleanValue(values[GET24_COLUMN_MAP.postal_code]),
+            prefecture: cleanValue(values[GET24_COLUMN_MAP.prefecture]),
             city: cleanValue(values[GET24_COLUMN_MAP.city]),
             address_line1: cleanValue(values[GET24_COLUMN_MAP.address_line1]),
             address_line2: cleanValue(values[GET24_COLUMN_MAP.address_line2]),
