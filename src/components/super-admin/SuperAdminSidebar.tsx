@@ -6,7 +6,8 @@ import {
   BarChart3,
   LogOut,
   Settings,
-  Shield
+  Shield,
+  MessageSquare
 } from "lucide-react";
 import {
   Sidebar,
@@ -25,6 +26,7 @@ const menuItems = [
   { title: "ダッシュボード", url: "/super-admin", icon: LayoutDashboard },
   { title: "テナント管理", url: "/super-admin/tenants", icon: Building2 },
   { title: "全ユーザー管理", url: "/super-admin/users", icon: Users },
+  { title: "サポートチケット", url: "/super-admin/tickets", icon: MessageSquare },
   { title: "全体分析", url: "/super-admin/analytics", icon: BarChart3 },
 ];
 

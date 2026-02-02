@@ -12,7 +12,8 @@ import {
   CreditCard,
   Image,
   Shield,
-  Upload
+  Upload,
+  MessageSquare
 } from "lucide-react";
 import {
   Sidebar,
@@ -40,6 +41,7 @@ const menuItems = [
   { title: "ユーザー管理", url: "/admin/users", icon: Users },
   { title: "売上分析", url: "/admin/analytics", icon: BarChart3 },
   { title: "ユーザー移行", url: "/admin/migration", icon: Upload },
+  { title: "サポート", url: "/admin/support", icon: MessageSquare },
 ];
 
 export function AdminSidebar() {
