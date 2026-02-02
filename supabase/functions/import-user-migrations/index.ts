@@ -43,7 +43,10 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    
+    // Service role client for data operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Verify admin access
     const authHeader = req.headers.get("Authorization");
@@ -55,18 +58,26 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !user) {
+      console.error("Auth error:", authError);
       return new Response(JSON.stringify({ error: "認証エラー" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check if user is admin or super_admin
-    const { data: isAdmin } = await supabase.rpc("is_admin");
-    const { data: isSuperAdmin } = await supabase.rpc("is_super_admin");
+    // Create user-context client for RPC calls
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Check if user is admin or super_admin using user context
+    const { data: isAdmin, error: adminError } = await supabaseUser.rpc("is_admin");
+    const { data: isSuperAdmin, error: superAdminError } = await supabaseUser.rpc("is_super_admin");
+    
+    console.log("Auth check:", { userId: user.id, isAdmin, isSuperAdmin, adminError, superAdminError });
     
     if (!isAdmin && !isSuperAdmin) {
       return new Response(JSON.stringify({ error: "管理者権限が必要です" }), {
@@ -74,6 +85,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    
+    // Use admin client for data operations
+    const supabase = supabaseAdmin;
 
     const { tenant_id, records, csv_data } = await req.json();
 
