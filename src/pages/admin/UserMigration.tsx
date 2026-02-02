@@ -66,15 +66,24 @@ export default function UserMigration() {
     queryFn: async (): Promise<MigrationStats> => {
       if (!tenant?.id) return { total: 0, applied: 0, pending: 0 };
 
-      const { data, error } = await supabase
-        .from("user_migrations")
-        .select("is_applied")
-        .eq("tenant_id", tenant.id);
+      // Use count queries to avoid 1000 row limit
+      const [totalResult, appliedResult] = await Promise.all([
+        supabase
+          .from("user_migrations")
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", tenant.id),
+        supabase
+          .from("user_migrations")
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", tenant.id)
+          .eq("is_applied", true),
+      ]);
 
-      if (error) throw error;
+      if (totalResult.error) throw totalResult.error;
+      if (appliedResult.error) throw appliedResult.error;
 
-      const total = data?.length || 0;
-      const applied = data?.filter(r => r.is_applied === true).length || 0;
+      const total = totalResult.count || 0;
+      const applied = appliedResult.count || 0;
       const pending = total - applied;
 
       return { total, applied, pending };
