@@ -95,6 +95,50 @@ export type Database = {
           },
         ]
       }
+      daily_analytics: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          legacy_id: number | null
+          payment_amount: number | null
+          points_used: number | null
+          profit: number | null
+          status: number | null
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          legacy_id?: number | null
+          payment_amount?: number | null
+          points_used?: number | null
+          profit?: number | null
+          status?: number | null
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          legacy_id?: number | null
+          payment_amount?: number | null
+          points_used?: number | null
+          profit?: number | null
+          status?: number | null
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_analytics_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gacha_animation_patterns: {
         Row: {
           created_at: string
