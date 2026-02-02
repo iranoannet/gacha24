@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
+import { useAuth } from "@/hooks/useAuth";
 import { Users, Clock, UserCheck, RefreshCw, ShoppingCart, Package, CheckCircle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useQuery } from "@tanstack/react-query";
@@ -29,23 +30,27 @@ interface MigrationRecord {
 
 export default function UserMigration() {
   const { tenant } = useTenant();
+  const { tenantId: authTenantId, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState("users");
+  
+  // Use tenant from URL if available, otherwise use tenant from auth
+  const effectiveTenantId = tenant?.id || authTenantId;
 
   // Fetch migration stats
   const { data: stats, refetch: refetchStats, isLoading: statsLoading } = useQuery({
-    queryKey: ["migration-stats", tenant?.id],
+    queryKey: ["migration-stats", effectiveTenantId],
     queryFn: async (): Promise<MigrationStats> => {
-      if (!tenant?.id) return { total: 0, applied: 0, pending: 0 };
+      if (!effectiveTenantId) return { total: 0, applied: 0, pending: 0 };
 
       const [totalResult, appliedResult] = await Promise.all([
         supabase
           .from("user_migrations")
           .select("id", { count: "exact", head: true })
-          .eq("tenant_id", tenant.id),
+          .eq("tenant_id", effectiveTenantId),
         supabase
           .from("user_migrations")
           .select("id", { count: "exact", head: true })
-          .eq("tenant_id", tenant.id)
+          .eq("tenant_id", effectiveTenantId)
           .eq("is_applied", true),
       ]);
 
@@ -57,56 +62,56 @@ export default function UserMigration() {
 
       return { total, applied, pending: total - applied };
     },
-    enabled: !!tenant?.id,
+    enabled: !!effectiveTenantId,
   });
 
   // Fetch transaction count
   const { data: transactionCount, refetch: refetchTransactions } = useQuery({
-    queryKey: ["transaction-count", tenant?.id],
+    queryKey: ["transaction-count", effectiveTenantId],
     queryFn: async () => {
-      if (!tenant?.id) return 0;
+      if (!effectiveTenantId) return 0;
       const { count, error } = await supabase
         .from("user_transactions")
         .select("id", { count: "exact", head: true })
-        .eq("tenant_id", tenant.id);
+        .eq("tenant_id", effectiveTenantId);
       if (error) throw error;
       return count || 0;
     },
-    enabled: !!tenant?.id,
+    enabled: !!effectiveTenantId,
   });
 
   // Fetch inventory count
   const { data: inventoryCount, refetch: refetchInventory } = useQuery({
-    queryKey: ["inventory-count", tenant?.id],
+    queryKey: ["inventory-count", effectiveTenantId],
     queryFn: async () => {
-      if (!tenant?.id) return 0;
+      if (!effectiveTenantId) return 0;
       const { count, error } = await supabase
         .from("inventory_actions")
         .select("id", { count: "exact", head: true })
-        .eq("tenant_id", tenant.id);
+        .eq("tenant_id", effectiveTenantId);
       if (error) throw error;
       return count || 0;
     },
-    enabled: !!tenant?.id,
+    enabled: !!effectiveTenantId,
   });
 
   // Fetch recent migration records
   const { data: recentRecords, refetch: refetchRecords } = useQuery({
-    queryKey: ["migration-records", tenant?.id],
+    queryKey: ["migration-records", effectiveTenantId],
     queryFn: async (): Promise<MigrationRecord[]> => {
-      if (!tenant?.id) return [];
+      if (!effectiveTenantId) return [];
 
       const { data, error } = await supabase
         .from("user_migrations")
         .select("id, email, display_name, points_balance, is_applied, created_at")
-        .eq("tenant_id", tenant.id)
+        .eq("tenant_id", effectiveTenantId)
         .order("created_at", { ascending: false })
         .limit(50);
 
       if (error) throw error;
       return data || [];
     },
-    enabled: !!tenant?.id,
+    enabled: !!effectiveTenantId,
   });
 
   const handleRefresh = () => {
@@ -117,11 +122,23 @@ export default function UserMigration() {
     toast.success("データを更新しました");
   };
 
-  if (!tenant?.id) {
+  if (authLoading) {
     return (
       <AdminLayout title="データ移行">
         <div className="text-center text-muted-foreground py-12">
-          テナント情報を読み込み中...
+          読み込み中...
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (!effectiveTenantId) {
+    return (
+      <AdminLayout title="データ移行">
+        <div className="text-center text-muted-foreground py-12">
+          テナントに所属していないか、テナント情報を取得できません。
+          <br />
+          <span className="text-sm">テナント固有のルート（例: /gachamo/admin/migration）からアクセスしてください。</span>
         </div>
       </AdminLayout>
     );
@@ -200,7 +217,7 @@ export default function UserMigration() {
 
           <TabsContent value="users" className="space-y-6">
             <CSVImporter
-              tenantId={tenant.id}
+              tenantId={effectiveTenantId}
               functionName="import-user-migrations"
               title="ユーザーCSVインポート"
               description="ユーザー情報とポイント残高をインポートします"
@@ -223,7 +240,7 @@ test@example.com,5000,山田,太郎,090-1234-5678,123-4567`}
 
           <TabsContent value="transactions" className="space-y-6">
             <CSVImporter
-              tenantId={tenant.id}
+              tenantId={effectiveTenantId}
               functionName="import-transactions"
               title="取引履歴CSVインポート"
               description="過去のガチャ購入履歴をインポートします（ユーザーが先に登録されている必要があります）"
@@ -252,7 +269,7 @@ test@example.com,新春ガチャ,3,1500,2024-01-15`}
 
           <TabsContent value="inventory" className="space-y-6">
             <CSVImporter
-              tenantId={tenant.id}
+              tenantId={effectiveTenantId}
               functionName="import-inventory"
               title="発送/変換履歴CSVインポート"
               description="未発送アイテムや変換履歴をインポートします"
