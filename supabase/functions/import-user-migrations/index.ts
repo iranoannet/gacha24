@@ -21,6 +21,20 @@ interface MigrationRecord {
   legacy_user_id?: number;
 }
 
+// Column indices for get24 CSV format (0-indexed)
+const GET24_COLUMN_MAP = {
+  legacy_user_id: 0,
+  last_name: 1,
+  first_name: 2,
+  postal_code: 5,
+  city: 9,
+  address_line1: 10,
+  address_line2: 11,
+  points_balance: 13,
+  phone_number: 14,
+  email: 15,
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -75,27 +89,62 @@ serve(async (req) => {
     // Handle CSV string input
     if (csv_data) {
       const lines = csv_data.trim().split("\n");
-      const headers = lines[0].split(",").map((h: string) => h.trim().toLowerCase());
       
-      for (let i = 1; i < lines.length; i++) {
-        const values = parseCSVLine(lines[i]);
-        const record: Record<string, any> = {};
+      // Check if first line looks like a header (contains common header keywords)
+      const firstLine = lines[0].toLowerCase();
+      const hasHeaders = firstLine.includes("email") || firstLine.includes("mail") || 
+                         firstLine.includes("メール") || firstLine.includes("ポイント");
+      
+      if (hasHeaders) {
+        // Parse with headers
+        const headers = lines[0].split(",").map((h: string) => h.trim().toLowerCase().replace(/^"|"$/g, ""));
         
-        headers.forEach((header: string, index: number) => {
-          const value = values[index]?.trim();
-          if (value) {
-            // Map common CSV column names to our schema
-            const mappedHeader = mapColumnName(header);
-            if (mappedHeader === "points_balance" || mappedHeader === "legacy_user_id") {
-              record[mappedHeader] = parseInt(value, 10) || 0;
-            } else {
-              record[mappedHeader] = value;
+        for (let i = 1; i < lines.length; i++) {
+          const values = parseCSVLine(lines[i]);
+          const record: Record<string, any> = {};
+          
+          headers.forEach((header: string, index: number) => {
+            const value = values[index]?.trim();
+            if (value && value !== "NULL" && value !== "null") {
+              const mappedHeader = mapColumnName(header);
+              if (mappedHeader === "points_balance" || mappedHeader === "legacy_user_id") {
+                record[mappedHeader] = Math.floor(parseFloat(value.replace(/,/g, "")) || 0);
+              } else {
+                record[mappedHeader] = value;
+              }
             }
+          });
+          
+          if (record.email) {
+            migrationRecords.push(record as MigrationRecord);
           }
-        });
-        
-        if (record.email) {
-          migrationRecords.push(record as MigrationRecord);
+        }
+      } else {
+        // Parse get24 format without headers (positional)
+        for (let i = 0; i < lines.length; i++) {
+          const values = parseCSVLine(lines[i]);
+          
+          const email = cleanValue(values[GET24_COLUMN_MAP.email]);
+          if (!email || !email.includes("@")) continue;
+          
+          const pointsRaw = cleanValue(values[GET24_COLUMN_MAP.points_balance]);
+          const points = Math.floor(parseFloat(pointsRaw?.replace(/,/g, "") || "0") || 0);
+          
+          const record: MigrationRecord = {
+            email,
+            last_name: cleanValue(values[GET24_COLUMN_MAP.last_name]),
+            first_name: cleanValue(values[GET24_COLUMN_MAP.first_name]),
+            display_name: `${cleanValue(values[GET24_COLUMN_MAP.last_name]) || ""} ${cleanValue(values[GET24_COLUMN_MAP.first_name]) || ""}`.trim() || undefined,
+            points_balance: points,
+            phone_number: cleanValue(values[GET24_COLUMN_MAP.phone_number]),
+            postal_code: cleanValue(values[GET24_COLUMN_MAP.postal_code]),
+            city: cleanValue(values[GET24_COLUMN_MAP.city]),
+            address_line1: cleanValue(values[GET24_COLUMN_MAP.address_line1]),
+            address_line2: cleanValue(values[GET24_COLUMN_MAP.address_line2]),
+            legacy_user_id: parseInt(cleanValue(values[GET24_COLUMN_MAP.legacy_user_id]) || "0", 10) || undefined,
+          };
+          
+          migrationRecords.push(record);
         }
       }
     } else if (records && Array.isArray(records)) {
@@ -160,6 +209,16 @@ serve(async (req) => {
     );
   }
 });
+
+// Clean value by removing quotes and handling NULL
+function cleanValue(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const cleaned = value.trim().replace(/^"|"$/g, "");
+  if (cleaned === "" || cleaned === "NULL" || cleaned === "null" || cleaned === "　") {
+    return undefined;
+  }
+  return cleaned;
+}
 
 // Parse CSV line handling quoted values
 function parseCSVLine(line: string): string[] {

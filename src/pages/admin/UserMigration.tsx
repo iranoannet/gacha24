@@ -123,12 +123,32 @@ export default function UserMigration() {
     reader.readAsText(file);
   };
 
-  // Parse CSV into lines (excluding header)
-  const parseCSVLines = (csv: string): { header: string; lines: string[] } => {
-    const allLines = csv.trim().split("\n");
-    const header = allLines[0];
-    const lines = allLines.slice(1).filter(line => line.trim());
-    return { header, lines };
+  // Check if CSV has headers
+  const hasHeaders = (csv: string): boolean => {
+    const firstLine = csv.split("\n")[0]?.toLowerCase() || "";
+    return firstLine.includes("email") || firstLine.includes("mail") || 
+           firstLine.includes("メール") || firstLine.includes("ポイント");
+  };
+
+  // Parse CSV into lines (with or without header)
+  const parseCSVLines = (csv: string): { header: string | null; lines: string[]; withHeaders: boolean } => {
+    const allLines = csv.trim().split("\n").filter(line => line.trim());
+    const withHeaders = hasHeaders(csv);
+    
+    if (withHeaders) {
+      return { 
+        header: allLines[0], 
+        lines: allLines.slice(1), 
+        withHeaders: true 
+      };
+    } else {
+      // No headers - all lines are data
+      return { 
+        header: null, 
+        lines: allLines, 
+        withHeaders: false 
+      };
+    }
   };
 
   // Batch import with 100 records at a time
@@ -149,7 +169,7 @@ export default function UserMigration() {
       return;
     }
 
-    const { header, lines } = parseCSVLines(csvData);
+    const { header, lines, withHeaders } = parseCSVLines(csvData);
     const totalRecords = lines.length;
     const totalBatches = Math.ceil(totalRecords / BATCH_SIZE);
 
@@ -198,7 +218,9 @@ export default function UserMigration() {
       const startIdx = batchIndex * BATCH_SIZE;
       const endIdx = Math.min(startIdx + BATCH_SIZE, totalRecords);
       const batchLines = lines.slice(startIdx, endIdx);
-      const batchCsv = [header, ...batchLines].join("\n");
+      
+      // If CSV has headers, prepend header to each batch; otherwise just send data lines
+      const batchCsv = withHeaders && header ? [header, ...batchLines].join("\n") : batchLines.join("\n");
 
       try {
         const response = await supabase.functions.invoke("import-user-migrations", {
