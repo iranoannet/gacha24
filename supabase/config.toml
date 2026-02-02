@@ -17,3 +17,12 @@ verify_jwt = false
 
 [functions.check-ip-access]
 verify_jwt = false
+
+[functions.import-user-migrations]
+verify_jwt = false
+
+[functions.import-transactions]
+verify_jwt = false
+
+[functions.import-inventory]
+verify_jwt = false
