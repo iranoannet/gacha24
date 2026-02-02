@@ -37,6 +37,7 @@ interface BatchProgress {
   insertedTotal: number;
   skippedTotal: number;
   duplicatesRemovedTotal: number;
+  invalidEmailsTotal: number;
   errors: string[];
   status: "idle" | "running" | "paused" | "completed" | "stopped";
 }
@@ -55,6 +56,7 @@ export default function UserMigration() {
     insertedTotal: 0,
     skippedTotal: 0,
     duplicatesRemovedTotal: 0,
+    invalidEmailsTotal: 0,
     errors: [],
     status: "idle",
   });
@@ -195,6 +197,7 @@ export default function UserMigration() {
       insertedTotal: 0,
       skippedTotal: 0,
       duplicatesRemovedTotal: 0,
+      invalidEmailsTotal: 0,
       errors: [],
       status: "running",
     });
@@ -203,6 +206,7 @@ export default function UserMigration() {
     let insertedTotal = 0;
     let skippedTotal = 0;
     let duplicatesRemovedTotal = 0;
+    let invalidEmailsTotal = 0;
     const allErrors: string[] = [];
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -249,6 +253,7 @@ export default function UserMigration() {
           insertedTotal += response.data.inserted || 0;
           skippedTotal += response.data.skipped || 0;
           duplicatesRemovedTotal += response.data.duplicates_in_file || 0;
+          invalidEmailsTotal += response.data.invalid_emails || 0;
           if (response.data.errors) {
             allErrors.push(...response.data.errors);
           }
@@ -266,6 +271,7 @@ export default function UserMigration() {
         insertedTotal,
         skippedTotal,
         duplicatesRemovedTotal,
+        invalidEmailsTotal,
         errors: allErrors,
         status: batchIndex + 1 === totalBatches ? "completed" : "running",
       });
@@ -472,7 +478,7 @@ test@example.com,5000,山田,太郎,090-1234-5678,123-4567,東京都,渋谷区,�
                         className="h-3"
                       />
                       
-                      <div className="grid grid-cols-5 gap-2 text-center text-sm">
+                      <div className="grid grid-cols-6 gap-2 text-center text-sm">
                         <div>
                           <p className="text-lg font-bold">{batchProgress.processedRecords.toLocaleString()}</p>
                           <p className="text-xs text-muted-foreground">処理済み</p>
@@ -490,8 +496,12 @@ test@example.com,5000,山田,太郎,090-1234-5678,123-4567,東京都,渋谷区,�
                           <p className="text-xs text-muted-foreground">スキップ</p>
                         </div>
                         <div>
-                          <p className="text-lg font-bold text-orange-500">{batchProgress.duplicatesRemovedTotal.toLocaleString()}</p>
+                          <p className="text-lg font-bold text-amber-500">{batchProgress.duplicatesRemovedTotal.toLocaleString()}</p>
                           <p className="text-xs text-muted-foreground">重複除去</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold text-destructive">{batchProgress.invalidEmailsTotal.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">無効メール</p>
                         </div>
                       </div>
 
