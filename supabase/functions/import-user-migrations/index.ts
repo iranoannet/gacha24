@@ -99,19 +99,27 @@ serve(async (req) => {
     }
 
     let migrationRecords: MigrationRecord[] = [];
+    let invalidEmailCount = 0;
+    let totalLinesProcessed = 0;
 
     // Handle CSV string input
     if (csv_data) {
-      const lines = csv_data.trim().split("\n");
+      const lines = csv_data.trim().split("\n").filter((line: string) => line.trim());
+      totalLinesProcessed = lines.length;
+      
+      console.log(`Processing ${lines.length} lines of CSV data`);
       
       // Check if first line looks like a header (contains common header keywords)
-      const firstLine = lines[0].toLowerCase();
+      const firstLine = lines[0]?.toLowerCase() || "";
       const hasHeaders = firstLine.includes("email") || firstLine.includes("mail") || 
                          firstLine.includes("メール") || firstLine.includes("ポイント");
+      
+      console.log(`Header detection: hasHeaders=${hasHeaders}, firstLine="${firstLine.substring(0, 50)}..."`);
       
       if (hasHeaders) {
         // Parse with headers
         const headers = lines[0].split(",").map((h: string) => h.trim().toLowerCase().replace(/^"|"$/g, ""));
+        totalLinesProcessed = lines.length - 1; // Exclude header
         
         for (let i = 1; i < lines.length; i++) {
           const values = parseCSVLine(lines[i]);
@@ -129,8 +137,10 @@ serve(async (req) => {
             }
           });
           
-          if (record.email) {
+          if (record.email && record.email.includes("@")) {
             migrationRecords.push(record as MigrationRecord);
+          } else {
+            invalidEmailCount++;
           }
         }
       } else {
@@ -139,7 +149,10 @@ serve(async (req) => {
           const values = parseCSVLine(lines[i]);
           
           const email = cleanValue(values[GET24_COLUMN_MAP.email]);
-          if (!email || !email.includes("@")) continue;
+          if (!email || !email.includes("@")) {
+            invalidEmailCount++;
+            continue;
+          }
           
           const pointsRaw = cleanValue(values[GET24_COLUMN_MAP.points_balance]);
           const points = Math.floor(parseFloat(pointsRaw?.replace(/,/g, "") || "0") || 0);
@@ -161,8 +174,11 @@ serve(async (req) => {
           migrationRecords.push(record);
         }
       }
+      
+      console.log(`Parsed ${migrationRecords.length} valid records, ${invalidEmailCount} invalid emails from ${totalLinesProcessed} data lines`);
     } else if (records && Array.isArray(records)) {
       migrationRecords = records;
+      totalLinesProcessed = records.length;
     } else {
       return new Response(JSON.stringify({ error: "records or csv_data is required" }), {
         status: 400,
@@ -212,9 +228,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
+        total_lines: totalLinesProcessed,
         total_records: migrationRecords.length,
         unique_records: uniqueRecords.length,
         duplicates_in_file: duplicatesRemoved,
+        invalid_emails: invalidEmailCount,
         inserted,
         skipped: uniqueRecords.length - inserted,
         errors: errors.length > 0 ? errors : undefined,
