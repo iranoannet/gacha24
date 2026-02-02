@@ -27,8 +27,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Upload, X, ArrowRight, ArrowLeft, Search, Copy } from "lucide-react";
-import { AnimationPreviewDialog } from "@/components/admin/AnimationPreviewDialog";
+import { Plus, Edit, Trash2, Upload, X, ArrowRight, ArrowLeft, Search, Copy, Film } from "lucide-react";
+import { AnimationVideoManager } from "@/components/admin/AnimationVideoManager";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -93,8 +93,6 @@ export default function GachaManagement() {
     status: "draft" as GachaStatus,
     category: null as CardCategory | null,
     notice_text: defaultNotice,
-    animation_type: "A" as "A" | "B" | "C", // A = スロット風, B = カードパック開封風, C = ベーゴマ対決風
-    fake_s_tier_chance: 15, // フェイク演出確率（0-100%）
     display_tags: [] as string[], // Display tags for homepage sections
   });
 
@@ -262,8 +260,6 @@ export default function GachaManagement() {
       status: "draft",
       category: null,
       notice_text: defaultNotice,
-      animation_type: "A",
-      fake_s_tier_chance: 15,
       display_tags: [],
     });
     setSelectedItems([]);
@@ -418,8 +414,6 @@ export default function GachaManagement() {
         status: "draft",
         category: (gacha as any).category || null,
         notice_text: (gacha as any).notice_text || defaultNotice,
-        animation_type: (gacha as any).animation_type || "A",
-        fake_s_tier_chance: (gacha as any).fake_s_tier_chance ?? 15,
         display_tags: (gacha as any).display_tags || [],
       });
       setSelectedCategory((gacha as any).category || null);
@@ -448,8 +442,6 @@ export default function GachaManagement() {
       status: gacha.status,
       category: (gacha as any).category || null,
       notice_text: (gacha as any).notice_text || defaultNotice,
-      animation_type: (gacha as any).animation_type || "A",
-      fake_s_tier_chance: (gacha as any).fake_s_tier_chance ?? 15,
       display_tags: (gacha as any).display_tags || [],
     });
     setBannerFile(null);
@@ -777,55 +769,6 @@ export default function GachaManagement() {
                     )}
                   </div>
                   
-                  {/* 演出タイプ選択 */}
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <Label>演出タイプ</Label>
-                      <AnimationPreviewDialog 
-                        animationType={formData.animation_type}
-                        fakeSChance={formData.fake_s_tier_chance}
-                      />
-                    </div>
-                    <Select
-                      value={formData.animation_type}
-                      onValueChange={(value: "A" | "B" | "C") => setFormData({ ...formData, animation_type: value })}
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="A">A演出（スロットマシン風）</SelectItem>
-                        <SelectItem value="B">B演出（カードパック開封風）</SelectItem>
-                        <SelectItem value="C">C演出（ベーゴマ対決風）</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formData.animation_type === "A" 
-                        ? "従来のスロットマシン風の演出です" 
-                        : formData.animation_type === "B"
-                        ? "カードパックが破れて中からカードが飛び出す演出です"
-                        : "ベーゴマが対決して勝者の色で結果を表示します（金=S, 赤=A, 黒=B, 白=ハズレ）"}
-                    </p>
-                  </div>
-                  
-                  {/* フェイク演出確率（B演出時のみ） */}
-                  {formData.animation_type === "B" && (
-                    <div>
-                      <Label>フェイク演出確率: {formData.fake_s_tier_chance}%</Label>
-                      <input
-                        type="range"
-                        min={0}
-                        max={50}
-                        value={formData.fake_s_tier_chance}
-                        onChange={(e) => setFormData({ ...formData, fake_s_tier_chance: parseInt(e.target.value) })}
-                        className="w-full mt-2"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        ハズレでもS賞風の演出が出る確率（ドキドキ演出）
-                      </p>
-                    </div>
-                  )}
-                  
                   {/* Display Tags Selection */}
                   <div>
                     <Label>表示タグ（ホームページセクション）</Label>
@@ -1038,6 +981,11 @@ export default function GachaManagement() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <AnimationVideoManager
+                            gachaId={gacha.id}
+                            gachaTitle={gacha.title}
+                            tenantId={tenant?.id}
+                          />
                           {gacha.status === "draft" && (
                             <Button
                               variant="ghost"
@@ -1138,55 +1086,6 @@ export default function GachaManagement() {
                   </Button>
                 )}
               </div>
-              
-              {/* 演出タイプ選択 */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <Label>演出タイプ</Label>
-                  <AnimationPreviewDialog 
-                    animationType={formData.animation_type}
-                    fakeSChance={formData.fake_s_tier_chance}
-                  />
-                </div>
-                <Select
-                  value={formData.animation_type}
-                  onValueChange={(value: "A" | "B" | "C") => setFormData({ ...formData, animation_type: value })}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="A">A演出（スロットマシン風）</SelectItem>
-                    <SelectItem value="B">B演出（カードパック開封風）</SelectItem>
-                    <SelectItem value="C">C演出（ベーゴマ対決風）</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {formData.animation_type === "A" 
-                    ? "従来のスロットマシン風の演出です" 
-                    : formData.animation_type === "B"
-                    ? "カードパックが破れて中からカードが飛び出す演出です"
-                    : "ベーゴマが対決して勝者の色で結果を表示します（金=S, 赤=A, 黒=B, 白=ハズレ）"}
-                </p>
-              </div>
-              
-              {/* フェイク演出確率（B演出時のみ） */}
-              {formData.animation_type === "B" && (
-                <div>
-                  <Label>フェイク演出確率: {formData.fake_s_tier_chance}%</Label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={50}
-                    value={formData.fake_s_tier_chance}
-                    onChange={(e) => setFormData({ ...formData, fake_s_tier_chance: parseInt(e.target.value) })}
-                    className="w-full mt-2"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    ハズレでもS賞風の演出が出る確率（ドキドキ演出）
-                  </p>
-                </div>
-              )}
               <div>
                 <Label htmlFor="edit-status">ステータス</Label>
                 <Select

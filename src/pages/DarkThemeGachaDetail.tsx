@@ -11,17 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
 import { GachaResultModal } from "@/components/gacha/GachaResultModal";
 import { GachaConfirmDialog } from "@/components/gacha/GachaConfirmDialog";
-import { 
-  GachaAnimationSystem, 
-  getAnimationParamsForPrizeTier, 
-  getHighestPrizeTier,
-  type ColorTheme,
-  type IntensityLevel,
-  type CameraMotion,
-  type ParticleStyle,
-} from "@/components/gacha/GachaAnimationSystem";
-import { CardPackAnimation } from "@/components/gacha/CardPackAnimation";
-import { BeigomaBattleAnimation, getBeigomaPrizeTier } from "@/components/gacha/BeigomaBattleAnimation";
+import { VideoAnimation, getHighestPrizeTierForVideo } from "@/components/gacha/VideoAnimation";
 import type { Database } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 
@@ -175,20 +165,6 @@ const DarkThemeGachaDetail = () => {
   const [pendingPlayCount, setPendingPlayCount] = useState<number>(1);
   const [pendingDrawnCards, setPendingDrawnCards] = useState<DrawnCard[]>([]);
   
-  const [animParams, setAnimParams] = useState<{
-    colorTheme: ColorTheme;
-    intensity: IntensityLevel;
-    cameraMotion: CameraMotion;
-    particleStyle: ParticleStyle;
-    isRainbow: boolean;
-  }>({
-    colorTheme: "gold",
-    intensity: 3,
-    cameraMotion: "zoomIn",
-    particleStyle: "spark",
-    isRainbow: false,
-  });
-  
   const pendingResultRef = useRef<GachaResult | null>(null);
 
   // Fetch gacha master info
@@ -319,9 +295,6 @@ const DarkThemeGachaDetail = () => {
         throw new Error(data.error);
       }
 
-      const highestTier = getHighestPrizeTier(data.drawnCards);
-      const params = getAnimationParamsForPrizeTier(highestTier, count);
-      setAnimParams(params);
       setPendingDrawnCards(data.drawnCards);
 
       pendingResultRef.current = {
@@ -631,37 +604,14 @@ const DarkThemeGachaDetail = () => {
         gachaTitle={gacha?.title || ""}
       />
 
-      {/* Animation */}
-      {gacha.animation_type === "B" ? (
-        <CardPackAnimation
-          isPlaying={isPlaying}
-          onComplete={handleAnimationComplete}
-          onSkip={handleAnimationComplete}
-          drawnCards={pendingDrawnCards}
-          playCount={pendingPlayCount}
-          fakeSChance={gacha.fake_s_tier_chance ?? 15}
-        />
-      ) : gacha.animation_type === "C" ? (
-        <BeigomaBattleAnimation
-          isPlaying={isPlaying}
-          onComplete={handleAnimationComplete}
-          onSkip={handleAnimationComplete}
-          prizeTier={getBeigomaPrizeTier(pendingDrawnCards)}
-          playCount={pendingPlayCount}
-        />
-      ) : (
-        <GachaAnimationSystem
-          isPlaying={isPlaying}
-          onComplete={handleAnimationComplete}
-          onSkip={handleAnimationComplete}
-          colorTheme={animParams.colorTheme}
-          intensity={animParams.intensity}
-          cameraMotion={animParams.cameraMotion}
-          particleStyle={animParams.particleStyle}
-          playCount={pendingPlayCount}
-          isRainbow={animParams.isRainbow}
-        />
-      )}
+      {/* Video Animation */}
+      <VideoAnimation
+        isPlaying={isPlaying}
+        onComplete={handleAnimationComplete}
+        onSkip={handleAnimationComplete}
+        gachaId={gacha?.id || ""}
+        prizeTier={getHighestPrizeTierForVideo(pendingDrawnCards)}
+      />
 
       {/* Result Modal */}
       <GachaResultModal
