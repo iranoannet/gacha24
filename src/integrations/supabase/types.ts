@@ -95,6 +95,54 @@ export type Database = {
           },
         ]
       }
+      gacha_animation_videos: {
+        Row: {
+          created_at: string
+          file_name: string | null
+          file_size: number | null
+          gacha_id: string
+          id: string
+          prize_tier: string
+          tenant_id: string | null
+          video_url: string
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string | null
+          file_size?: number | null
+          gacha_id: string
+          id?: string
+          prize_tier: string
+          tenant_id?: string | null
+          video_url: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string | null
+          file_size?: number | null
+          gacha_id?: string
+          id?: string
+          prize_tier?: string
+          tenant_id?: string | null
+          video_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gacha_animation_videos_gacha_id_fkey"
+            columns: ["gacha_id"]
+            isOneToOne: false
+            referencedRelation: "gacha_masters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gacha_animation_videos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gacha_masters: {
         Row: {
           animation_type: string
