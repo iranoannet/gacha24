@@ -300,28 +300,38 @@ test@example.com,新春ガチャ,3,1500,2024-01-15`}
             <CSVImporter
               tenantId={effectiveTenantId}
               functionName="import-inventory"
-              title="発送/変換履歴CSVインポート"
-              description="未発送アイテムや変換履歴をインポートします"
-              placeholder={`user_email,card_name,action_type,status,tracking_number,converted_points
-test@example.com,レアカードA,shipping,pending,,
-test@example.com,コモンカードB,conversion,completed,,50`}
+              title="発送/変換履歴CSVインポート (pack_cards)"
+              description="旧システムの取引履歴(pack_cards)をインポートします。user_id > 0のレコードのみ処理されます。"
+              placeholder={`id,pack_id,card_id,user_id,num,price,sale_price,stock_sale_price,redemption_point,show_list,hit_count,order,attention_mode,action_type,status,created,modified
+33257788,25101,1028349,17995,1,0,0,0,100,1,0,0,0,1,1,2024-12-31 11:31:21,2024-12-31 14:37:01`}
               onSuccess={() => refetchInventory()}
               formatHelp={
-                <ul className="text-xs space-y-1 text-muted-foreground">
-                  <li><code className="bg-muted px-1">user_email</code> - ユーザーメール（必須）</li>
-                  <li><code className="bg-muted px-1">card_name</code> - カード名</li>
-                  <li><code className="bg-muted px-1">action_type</code> - shipping / conversion</li>
-                  <li><code className="bg-muted px-1">status</code> - pending / processing / completed / shipped</li>
-                  <li><code className="bg-muted px-1">tracking_number</code> - 追跡番号（発送の場合）</li>
-                  <li><code className="bg-muted px-1">converted_points</code> - 変換ポイント</li>
-                </ul>
+                <div className="space-y-3">
+                  <p className="text-xs font-medium">pack_cards.csv フォーマット（自動検出）:</p>
+                  <ul className="text-xs space-y-1 text-muted-foreground">
+                    <li><code className="bg-muted px-1">id</code> - レコードID（legacy_pack_card_id）</li>
+                    <li><code className="bg-muted px-1">pack_id</code> - ガチャパックID</li>
+                    <li><code className="bg-muted px-1">card_id</code> - カードID</li>
+                    <li><code className="bg-muted px-1">user_id</code> - レガシーユーザーID（0=未売却、&gt;0=当選者）</li>
+                    <li><code className="bg-muted px-1">redemption_point</code> - ポイント還元量</li>
+                    <li><code className="bg-muted px-1">status</code> - 1=発送、0=ポイント還元</li>
+                    <li><code className="bg-muted px-1">created</code> - 当選日時</li>
+                    <li><code className="bg-muted px-1">modified</code> - 処理日時</li>
+                  </ul>
+                </div>
               }
             />
-            <Card className="border-yellow-500/50 bg-yellow-50/50 dark:bg-yellow-950/20">
+            <Card className="border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20">
               <CardContent className="pt-4">
-                <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                  ⚠️ 注意: ユーザーとカードが先にシステムに登録されている必要があります。
-                </p>
+                <div className="text-sm text-blue-700 dark:text-blue-300 space-y-2">
+                  <p>⚠️ <strong>前提条件:</strong></p>
+                  <ul className="list-disc list-inside ml-2 space-y-1">
+                    <li>ユーザーCSVが先にインポートされ、<code className="bg-muted px-1">legacy_user_id</code>が設定されていること</li>
+                    <li>CSVの<code className="bg-muted px-1">user_id</code>は<code className="bg-muted px-1">user_migrations.legacy_user_id</code>と紐付けられます</li>
+                    <li><code className="bg-muted px-1">user_id = 0</code>の未売却レコードはスキップされます</li>
+                  </ul>
+                  <p className="mt-2">💡 <strong>変換ルール:</strong> <code className="bg-muted px-1">status=1</code>→発送依頼、<code className="bg-muted px-1">status=0</code>→ポイント変換</p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
