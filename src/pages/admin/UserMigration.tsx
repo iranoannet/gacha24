@@ -1,18 +1,16 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
-import { Upload, FileText, CheckCircle, AlertCircle, Users, Clock, UserCheck, RefreshCw, Pause, Play, Square } from "lucide-react";
+import { Users, Clock, UserCheck, RefreshCw, ShoppingCart, Package, CheckCircle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CSVImporter } from "@/components/admin/CSVImporter";
 
 interface MigrationStats {
   total: number;
@@ -29,40 +27,9 @@ interface MigrationRecord {
   created_at: string | null;
 }
 
-interface BatchProgress {
-  currentBatch: number;
-  totalBatches: number;
-  processedRecords: number;
-  totalRecords: number;
-  insertedTotal: number;
-  skippedTotal: number;
-  duplicatesRemovedTotal: number;
-  invalidEmailsTotal: number;
-  errors: string[];
-  status: "idle" | "running" | "paused" | "completed" | "stopped";
-}
-
-const BATCH_SIZE = 100;
-
 export default function UserMigration() {
   const { tenant } = useTenant();
-  const [csvData, setCsvData] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<BatchProgress>({
-    currentBatch: 0,
-    totalBatches: 0,
-    processedRecords: 0,
-    totalRecords: 0,
-    insertedTotal: 0,
-    skippedTotal: 0,
-    duplicatesRemovedTotal: 0,
-    invalidEmailsTotal: 0,
-    errors: [],
-    status: "idle",
-  });
-  
-  // Ref to control pause/stop
-  const controlRef = useRef<{ paused: boolean; stopped: boolean }>({ paused: false, stopped: false });
+  const [activeTab, setActiveTab] = useState("users");
 
   // Fetch migration stats
   const { data: stats, refetch: refetchStats, isLoading: statsLoading } = useQuery({
@@ -70,7 +37,6 @@ export default function UserMigration() {
     queryFn: async (): Promise<MigrationStats> => {
       if (!tenant?.id) return { total: 0, applied: 0, pending: 0 };
 
-      // Use count queries to avoid 1000 row limit
       const [totalResult, appliedResult] = await Promise.all([
         supabase
           .from("user_migrations")
@@ -88,9 +54,38 @@ export default function UserMigration() {
 
       const total = totalResult.count || 0;
       const applied = appliedResult.count || 0;
-      const pending = total - applied;
 
-      return { total, applied, pending };
+      return { total, applied, pending: total - applied };
+    },
+    enabled: !!tenant?.id,
+  });
+
+  // Fetch transaction count
+  const { data: transactionCount, refetch: refetchTransactions } = useQuery({
+    queryKey: ["transaction-count", tenant?.id],
+    queryFn: async () => {
+      if (!tenant?.id) return 0;
+      const { count, error } = await supabase
+        .from("user_transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenant.id);
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!tenant?.id,
+  });
+
+  // Fetch inventory count
+  const { data: inventoryCount, refetch: refetchInventory } = useQuery({
+    queryKey: ["inventory-count", tenant?.id],
+    queryFn: async () => {
+      if (!tenant?.id) return 0;
+      const { count, error } = await supabase
+        .from("inventory_actions")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenant.id);
+      if (error) throw error;
+      return count || 0;
     },
     enabled: !!tenant?.id,
   });
@@ -117,255 +112,85 @@ export default function UserMigration() {
   const handleRefresh = () => {
     refetchStats();
     refetchRecords();
+    refetchTransactions();
+    refetchInventory();
     toast.success("データを更新しました");
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      setCsvData(text);
-      toast.success(`${file.name} を読み込みました`);
-    };
-    reader.onerror = () => {
-      toast.error("ファイルの読み込みに失敗しました");
-    };
-    reader.readAsText(file);
-  };
-
-  // Check if CSV has headers
-  const hasHeaders = (csv: string): boolean => {
-    const firstLine = csv.split("\n")[0]?.toLowerCase() || "";
-    return firstLine.includes("email") || firstLine.includes("mail") || 
-           firstLine.includes("メール") || firstLine.includes("ポイント");
-  };
-
-  // Parse CSV into lines (with or without header)
-  const parseCSVLines = (csv: string): { header: string | null; lines: string[]; withHeaders: boolean } => {
-    const allLines = csv.trim().split("\n").filter(line => line.trim());
-    const withHeaders = hasHeaders(csv);
-    
-    if (withHeaders) {
-      return { 
-        header: allLines[0], 
-        lines: allLines.slice(1), 
-        withHeaders: true 
-      };
-    } else {
-      // No headers - all lines are data
-      return { 
-        header: null, 
-        lines: allLines, 
-        withHeaders: false 
-      };
-    }
-  };
-
-  // Batch import with 100 records at a time
-  const handleBatchImport = async () => {
-    if (!csvData.trim()) {
-      toast.error("CSVデータを入力してください");
-      return;
-    }
-
-    if (!tenant?.id) {
-      toast.error("テナント情報が取得できません");
-      return;
-    }
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      toast.error("ログインが必要です");
-      return;
-    }
-
-    const { header, lines, withHeaders } = parseCSVLines(csvData);
-    const totalRecords = lines.length;
-    const totalBatches = Math.ceil(totalRecords / BATCH_SIZE);
-
-    // Reset control ref
-    controlRef.current = { paused: false, stopped: false };
-
-    setBatchProgress({
-      currentBatch: 0,
-      totalBatches,
-      processedRecords: 0,
-      totalRecords,
-      insertedTotal: 0,
-      skippedTotal: 0,
-      duplicatesRemovedTotal: 0,
-      invalidEmailsTotal: 0,
-      errors: [],
-      status: "running",
-    });
-
-    setIsLoading(true);
-    let insertedTotal = 0;
-    let skippedTotal = 0;
-    let duplicatesRemovedTotal = 0;
-    let invalidEmailsTotal = 0;
-    const allErrors: string[] = [];
-
-    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-      // Check if stopped
-      if (controlRef.current.stopped) {
-        setBatchProgress(prev => ({ ...prev, status: "stopped" }));
-        toast.info("インポートを中止しました");
-        break;
-      }
-
-      // Check if paused
-      while (controlRef.current.paused && !controlRef.current.stopped) {
-        setBatchProgress(prev => ({ ...prev, status: "paused" }));
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      if (controlRef.current.stopped) {
-        setBatchProgress(prev => ({ ...prev, status: "stopped" }));
-        toast.info("インポートを中止しました");
-        break;
-      }
-
-      // Resume running status
-      setBatchProgress(prev => ({ ...prev, status: "running" }));
-
-      const startIdx = batchIndex * BATCH_SIZE;
-      const endIdx = Math.min(startIdx + BATCH_SIZE, totalRecords);
-      const batchLines = lines.slice(startIdx, endIdx);
-      
-      // If CSV has headers, prepend header to each batch; otherwise just send data lines
-      const batchCsv = withHeaders && header ? [header, ...batchLines].join("\n") : batchLines.join("\n");
-
-      try {
-        const response = await supabase.functions.invoke("import-user-migrations", {
-          body: {
-            tenant_id: tenant.id,
-            csv_data: batchCsv,
-          },
-        });
-
-        if (response.error) {
-          allErrors.push(`バッチ${batchIndex + 1}: ${response.error.message}`);
-        } else if (response.data) {
-          insertedTotal += response.data.inserted || 0;
-          skippedTotal += response.data.skipped || 0;
-          duplicatesRemovedTotal += response.data.duplicates_in_file || 0;
-          invalidEmailsTotal += response.data.invalid_emails || 0;
-          if (response.data.errors) {
-            allErrors.push(...response.data.errors);
-          }
-        }
-      } catch (error) {
-        allErrors.push(`バッチ${batchIndex + 1}: ${error instanceof Error ? error.message : "エラー"}`);
-      }
-
-      // Update progress
-      setBatchProgress({
-        currentBatch: batchIndex + 1,
-        totalBatches,
-        processedRecords: endIdx,
-        totalRecords,
-        insertedTotal,
-        skippedTotal,
-        duplicatesRemovedTotal,
-        invalidEmailsTotal,
-        errors: allErrors,
-        status: batchIndex + 1 === totalBatches ? "completed" : "running",
-      });
-
-      // Small delay between batches to avoid rate limiting
-      if (batchIndex < totalBatches - 1) {
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-    }
-
-    setIsLoading(false);
-    
-    if (!controlRef.current.stopped) {
-      setBatchProgress(prev => ({ ...prev, status: "completed" }));
-      toast.success(`インポート完了: ${insertedTotal}件成功, ${skippedTotal}件スキップ`);
-    }
-
-    // Refresh stats
-    refetchStats();
-    refetchRecords();
-  };
-
-  const handlePause = () => {
-    controlRef.current.paused = true;
-    toast.info("インポートを一時停止しました");
-  };
-
-  const handleResume = () => {
-    controlRef.current.paused = false;
-    toast.info("インポートを再開しました");
-  };
-
-  const handleStop = () => {
-    controlRef.current.stopped = true;
-    controlRef.current.paused = false;
-    toast.info("インポートを停止中...");
-  };
-
-  const previewLines = csvData.trim().split("\n").slice(0, 6);
-  const { lines: dataLines } = csvData ? parseCSVLines(csvData) : { lines: [] };
-  const estimatedBatches = Math.ceil(dataLines.length / BATCH_SIZE);
+  if (!tenant?.id) {
+    return (
+      <AdminLayout title="データ移行">
+        <div className="text-center text-muted-foreground py-12">
+          テナント情報を読み込み中...
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
-    <AdminLayout title="ユーザー移行">
+    <AdminLayout title="データ移行">
       <div className="space-y-6">
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">総インポート数</CardTitle>
+              <CardTitle className="text-sm font-medium">ユーザー移行</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{statsLoading ? "..." : stats?.total || 0}</div>
-              <p className="text-xs text-muted-foreground">移行データ登録済み</p>
+              <p className="text-xs text-muted-foreground">
+                適用済み: {stats?.applied || 0} / 待機: {stats?.pending || 0}
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">適用済み</CardTitle>
+              <CardTitle className="text-sm font-medium">取引履歴</CardTitle>
+              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{transactionCount || 0}</div>
+              <p className="text-xs text-muted-foreground">インポート済み</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">発送/変換履歴</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{inventoryCount || 0}</div>
+              <p className="text-xs text-muted-foreground">インポート済み</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">移行進捗</CardTitle>
               <UserCheck className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">{statsLoading ? "..." : stats?.applied || 0}</div>
-              <p className="text-xs text-muted-foreground">ログイン完了ユーザー</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">待機中</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statsLoading ? "..." : stats?.pending || 0}</div>
-              <p className="text-xs text-muted-foreground">未ログインユーザー</p>
+              {stats && stats.total > 0 ? (
+                <>
+                  <div className="text-2xl font-bold text-primary">
+                    {Math.round((stats.applied / stats.total) * 100)}%
+                  </div>
+                  <Progress value={(stats.applied / stats.total) * 100} className="h-2 mt-2" />
+                </>
+              ) : (
+                <div className="text-2xl font-bold text-muted-foreground">-</div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {stats && stats.total > 0 && (
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>移行進捗</span>
-              <span>{stats.applied} / {stats.total} ({Math.round((stats.applied / stats.total) * 100)}%)</span>
-            </div>
-            <Progress value={(stats.applied / stats.total) * 100} className="h-2" />
-          </div>
-        )}
-
-        <Tabs defaultValue="import" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <div className="flex items-center justify-between">
             <TabsList>
-              <TabsTrigger value="import">CSVインポート</TabsTrigger>
-              <TabsTrigger value="status">移行ステータス</TabsTrigger>
+              <TabsTrigger value="users">ユーザー</TabsTrigger>
+              <TabsTrigger value="transactions">取引履歴</TabsTrigger>
+              <TabsTrigger value="inventory">発送/変換</TabsTrigger>
+              <TabsTrigger value="status">ステータス</TabsTrigger>
             </TabsList>
             <Button variant="outline" size="sm" onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -373,220 +198,93 @@ export default function UserMigration() {
             </Button>
           </div>
 
-          <TabsContent value="import" className="space-y-6">
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Upload Section */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Upload className="h-5 w-5" />
-                    CSVアップロード
-                  </CardTitle>
-                  <CardDescription>
-                    CSVファイルをアップロードするか、直接データを貼り付けてください
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="csv-file">CSVファイル</Label>
-                    <Input
-                      id="csv-file"
-                      type="file"
-                      accept=".csv,.txt"
-                      onChange={handleFileUpload}
-                      className="mt-1"
-                    />
-                  </div>
+          <TabsContent value="users" className="space-y-6">
+            <CSVImporter
+              tenantId={tenant.id}
+              functionName="import-user-migrations"
+              title="ユーザーCSVインポート"
+              description="ユーザー情報とポイント残高をインポートします"
+              placeholder={`email,points_balance,last_name,first_name,phone_number,postal_code
+test@example.com,5000,山田,太郎,090-1234-5678,123-4567`}
+              onSuccess={() => { refetchStats(); refetchRecords(); }}
+              formatHelp={
+                <ul className="text-xs space-y-1 text-muted-foreground">
+                  <li><code className="bg-muted px-1">email</code> - メールアドレス（必須）</li>
+                  <li><code className="bg-muted px-1">points_balance</code> - ポイント残高</li>
+                  <li><code className="bg-muted px-1">last_name / first_name</code> - 姓・名</li>
+                  <li><code className="bg-muted px-1">phone_number</code> - 電話番号</li>
+                  <li><code className="bg-muted px-1">postal_code</code> - 郵便番号</li>
+                  <li><code className="bg-muted px-1">prefecture / city</code> - 都道府県・市区町村</li>
+                  <li><code className="bg-muted px-1">address_line1 / address_line2</code> - 住所</li>
+                </ul>
+              }
+            />
+          </TabsContent>
 
-                  <div>
-                    <Label htmlFor="csv-data">CSVデータ</Label>
-                    <Textarea
-                      id="csv-data"
-                      placeholder={`email,points_balance,last_name,first_name,phone_number,postal_code,prefecture,city,address_line1
-test@example.com,5000,山田,太郎,090-1234-5678,123-4567,東京都,渋谷区,道玄坂1-2-3`}
-                      value={csvData}
-                      onChange={(e) => setCsvData(e.target.value)}
-                      className="mt-1 h-48 font-mono text-xs"
-                    />
-                  </div>
+          <TabsContent value="transactions" className="space-y-6">
+            <CSVImporter
+              tenantId={tenant.id}
+              functionName="import-transactions"
+              title="取引履歴CSVインポート"
+              description="過去のガチャ購入履歴をインポートします（ユーザーが先に登録されている必要があります）"
+              placeholder={`user_email,gacha_title,play_count,total_spent_points,created_at
+test@example.com,新春ガチャ,3,1500,2024-01-15`}
+              onSuccess={() => refetchTransactions()}
+              formatHelp={
+                <ul className="text-xs space-y-1 text-muted-foreground">
+                  <li><code className="bg-muted px-1">user_email</code> - ユーザーメール（必須）</li>
+                  <li><code className="bg-muted px-1">gacha_title</code> - ガチャ名</li>
+                  <li><code className="bg-muted px-1">play_count</code> - プレイ回数</li>
+                  <li><code className="bg-muted px-1">total_spent_points</code> - 消費ポイント</li>
+                  <li><code className="bg-muted px-1">created_at</code> - 購入日時</li>
+                </ul>
+              }
+            />
+            <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
+              <CardContent className="pt-4">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  ⚠️ 注意: 取引履歴のインポートには、ユーザーが先にシステムに登録されている必要があります。
+                  ユーザーが見つからない場合はスキップされます。
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-                  {/* Batch info */}
-                  {dataLines.length > 0 && (
-                    <div className="p-3 bg-muted rounded-lg text-sm">
-                      <p><strong>{dataLines.length.toLocaleString()}</strong> 件のレコード</p>
-                      <p className="text-muted-foreground">
-                        {BATCH_SIZE}件ずつ <strong>{estimatedBatches}</strong> バッチで処理します
-                      </p>
-                    </div>
-                  )}
-
-                  <Button
-                    onClick={handleBatchImport}
-                    disabled={isLoading || !csvData.trim()}
-                    className="w-full"
-                  >
-                    {isLoading ? "インポート中..." : "バッチインポート開始"}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Preview & Progress Section */}
-              <div className="space-y-6">
-                {/* Batch Progress */}
-                {batchProgress.status !== "idle" && (
-                  <Card className={
-                    batchProgress.status === "completed" ? "border-primary" :
-                    batchProgress.status === "stopped" ? "border-destructive" :
-                    "border-accent"
-                  }>
-                    <CardHeader>
-                      <CardTitle className="flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                          {batchProgress.status === "completed" && <CheckCircle className="h-5 w-5 text-primary" />}
-                          {batchProgress.status === "stopped" && <Square className="h-5 w-5 text-destructive" />}
-                          {batchProgress.status === "running" && <Play className="h-5 w-5 text-primary animate-pulse" />}
-                          {batchProgress.status === "paused" && <Pause className="h-5 w-5 text-accent-foreground" />}
-                          バッチ進捗
-                        </span>
-                        {/* Control buttons */}
-                        {(batchProgress.status === "running" || batchProgress.status === "paused") && (
-                          <div className="flex gap-2">
-                            {batchProgress.status === "running" ? (
-                              <Button variant="outline" size="sm" onClick={handlePause}>
-                                <Pause className="h-4 w-4" />
-                              </Button>
-                            ) : (
-                              <Button variant="outline" size="sm" onClick={handleResume}>
-                                <Play className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Button variant="destructive" size="sm" onClick={handleStop}>
-                              <Square className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
-                      </CardTitle>
-                      <CardDescription>
-                        バッチ {batchProgress.currentBatch} / {batchProgress.totalBatches}
-                        {batchProgress.status === "paused" && " (一時停止中)"}
-                        {batchProgress.status === "stopped" && " (停止)"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Progress 
-                        value={(batchProgress.processedRecords / batchProgress.totalRecords) * 100} 
-                        className="h-3"
-                      />
-                      
-                      <div className="grid grid-cols-6 gap-2 text-center text-sm">
-                        <div>
-                          <p className="text-lg font-bold">{batchProgress.processedRecords.toLocaleString()}</p>
-                          <p className="text-xs text-muted-foreground">処理済み</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold">{batchProgress.totalRecords.toLocaleString()}</p>
-                          <p className="text-xs text-muted-foreground">総件数</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold text-primary">{batchProgress.insertedTotal.toLocaleString()}</p>
-                          <p className="text-xs text-muted-foreground">成功</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold text-muted-foreground">{batchProgress.skippedTotal.toLocaleString()}</p>
-                          <p className="text-xs text-muted-foreground">スキップ</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold text-amber-500">{batchProgress.duplicatesRemovedTotal.toLocaleString()}</p>
-                          <p className="text-xs text-muted-foreground">重複除去</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold text-destructive">{batchProgress.invalidEmailsTotal.toLocaleString()}</p>
-                          <p className="text-xs text-muted-foreground">無効メール</p>
-                        </div>
-                      </div>
-
-                      {batchProgress.errors.length > 0 && (
-                        <div className="mt-2 p-2 bg-destructive/10 rounded text-xs text-destructive max-h-24 overflow-y-auto">
-                          {batchProgress.errors.slice(-5).map((err, i) => (
-                            <p key={i}>{err}</p>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* CSV Preview */}
-                {csvData && batchProgress.status === "idle" && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        プレビュー
-                      </CardTitle>
-                      <CardDescription>
-                        {dataLines.length.toLocaleString()} 件のレコード
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <tbody>
-                            {previewLines.map((line, i) => (
-                              <tr key={i} className={i === 0 ? "font-bold bg-muted" : ""}>
-                                {line.split(",").slice(0, 5).map((cell, j) => (
-                                  <td key={j} className="px-2 py-1 border truncate max-w-[100px]">
-                                    {cell}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      {previewLines.length < csvData.trim().split("\n").length && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          ...他 {csvData.trim().split("\n").length - previewLines.length} 行
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Instructions */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>CSVフォーマット</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      以下のカラムに対応しています（日本語名も可）:
-                    </p>
-                    <ul className="text-xs space-y-1 text-muted-foreground">
-                      <li><code className="bg-muted px-1">email</code> / メールアドレス（必須）</li>
-                      <li><code className="bg-muted px-1">points_balance</code> / ポイント</li>
-                      <li><code className="bg-muted px-1">last_name</code> / 姓</li>
-                      <li><code className="bg-muted px-1">first_name</code> / 名</li>
-                      <li><code className="bg-muted px-1">phone_number</code> / 電話番号</li>
-                      <li><code className="bg-muted px-1">postal_code</code> / 郵便番号</li>
-                      <li><code className="bg-muted px-1">prefecture</code> / 都道府県</li>
-                      <li><code className="bg-muted px-1">city</code> / 市区町村</li>
-                      <li><code className="bg-muted px-1">address_line1</code> / 住所1</li>
-                      <li><code className="bg-muted px-1">address_line2</code> / 住所2</li>
-                    </ul>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+          <TabsContent value="inventory" className="space-y-6">
+            <CSVImporter
+              tenantId={tenant.id}
+              functionName="import-inventory"
+              title="発送/変換履歴CSVインポート"
+              description="未発送アイテムや変換履歴をインポートします"
+              placeholder={`user_email,card_name,action_type,status,tracking_number,converted_points
+test@example.com,レアカードA,shipping,pending,,
+test@example.com,コモンカードB,conversion,completed,,50`}
+              onSuccess={() => refetchInventory()}
+              formatHelp={
+                <ul className="text-xs space-y-1 text-muted-foreground">
+                  <li><code className="bg-muted px-1">user_email</code> - ユーザーメール（必須）</li>
+                  <li><code className="bg-muted px-1">card_name</code> - カード名</li>
+                  <li><code className="bg-muted px-1">action_type</code> - shipping / conversion</li>
+                  <li><code className="bg-muted px-1">status</code> - pending / processing / completed / shipped</li>
+                  <li><code className="bg-muted px-1">tracking_number</code> - 追跡番号（発送の場合）</li>
+                  <li><code className="bg-muted px-1">converted_points</code> - 変換ポイント</li>
+                </ul>
+              }
+            />
+            <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
+              <CardContent className="pt-4">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  ⚠️ 注意: ユーザーとカードが先にシステムに登録されている必要があります。
+                </p>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="status">
             <Card>
               <CardHeader>
                 <CardTitle>移行レコード一覧</CardTitle>
-                <CardDescription>
-                  最新50件を表示しています
-                </CardDescription>
+                <CardDescription>最新50件を表示</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
