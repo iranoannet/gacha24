@@ -95,6 +95,41 @@ export type Database = {
           },
         ]
       }
+      gacha_animation_patterns: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gacha_animation_patterns_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gacha_animation_videos: {
         Row: {
           created_at: string
@@ -102,6 +137,7 @@ export type Database = {
           file_size: number | null
           gacha_id: string | null
           id: string
+          pattern_id: string | null
           prize_tier: string
           tenant_id: string | null
           video_url: string
@@ -112,6 +148,7 @@ export type Database = {
           file_size?: number | null
           gacha_id?: string | null
           id?: string
+          pattern_id?: string | null
           prize_tier: string
           tenant_id?: string | null
           video_url: string
@@ -122,6 +159,7 @@ export type Database = {
           file_size?: number | null
           gacha_id?: string | null
           id?: string
+          pattern_id?: string | null
           prize_tier?: string
           tenant_id?: string | null
           video_url?: string
@@ -135,6 +173,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "gacha_animation_videos_pattern_id_fkey"
+            columns: ["pattern_id"]
+            isOneToOne: false
+            referencedRelation: "gacha_animation_patterns"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "gacha_animation_videos_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -145,6 +190,7 @@ export type Database = {
       }
       gacha_masters: {
         Row: {
+          animation_pattern_id: string | null
           animation_type: string
           banner_url: string | null
           category: Database["public"]["Enums"]["card_category"] | null
@@ -163,6 +209,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          animation_pattern_id?: string | null
           animation_type?: string
           banner_url?: string | null
           category?: Database["public"]["Enums"]["card_category"] | null
@@ -181,6 +228,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          animation_pattern_id?: string | null
           animation_type?: string
           banner_url?: string | null
           category?: Database["public"]["Enums"]["card_category"] | null
@@ -199,6 +247,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "gacha_masters_animation_pattern_id_fkey"
+            columns: ["animation_pattern_id"]
+            isOneToOne: false
+            referencedRelation: "gacha_animation_patterns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "gacha_masters_tenant_id_fkey"
             columns: ["tenant_id"]
