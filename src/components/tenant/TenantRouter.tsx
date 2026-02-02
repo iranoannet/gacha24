@@ -47,6 +47,7 @@ import Analytics from "@/pages/admin/Analytics";
 import BannerManagement from "@/pages/admin/BannerManagement";
 import UserMigration from "@/pages/admin/UserMigration";
 import SupportChat from "@/pages/admin/SupportChat";
+import AnimationSettings from "@/pages/admin/AnimationSettings";
 import { AdminProtectedRoute } from "@/components/admin/AdminProtectedRoute";
 
 /**
@@ -92,6 +93,7 @@ export function TenantRouter() {
         <Route path="/admin/gachas" element={<AdminProtectedRoute><GachaManagement /></AdminProtectedRoute>} />
         <Route path="/admin/slots" element={<AdminProtectedRoute><SlotEditor /></AdminProtectedRoute>} />
         <Route path="/admin/banners" element={<AdminProtectedRoute><BannerManagement /></AdminProtectedRoute>} />
+        <Route path="/admin/animations" element={<AdminProtectedRoute><AnimationSettings /></AdminProtectedRoute>} />
         <Route path="/admin/shipping" element={<AdminProtectedRoute><ShippingManagement /></AdminProtectedRoute>} />
         <Route path="/admin/payments" element={<AdminProtectedRoute><PaymentManagement /></AdminProtectedRoute>} />
         <Route path="/admin/users" element={<AdminProtectedRoute><UserManagement /></AdminProtectedRoute>} />
