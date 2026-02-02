@@ -121,6 +121,13 @@ serve(async (req) => {
         const headers = lines[0].split(",").map((h: string) => h.trim().toLowerCase().replace(/^"|"$/g, ""));
         totalLinesProcessed = lines.length - 1; // Exclude header
         
+        // Valid column names for user_migrations table
+        const validColumns = new Set([
+          "email", "display_name", "last_name", "first_name", 
+          "points_balance", "phone_number", "postal_code", "prefecture",
+          "city", "address_line1", "address_line2", "legacy_user_id"
+        ]);
+        
         for (let i = 1; i < lines.length; i++) {
           const values = parseCSVLine(lines[i]);
           const record: Record<string, any> = {};
@@ -129,6 +136,10 @@ serve(async (req) => {
             const value = values[index]?.trim();
             if (value && value !== "NULL" && value !== "null") {
               const mappedHeader = mapColumnName(header);
+              // Skip empty headers or columns not in our schema
+              if (!mappedHeader || !validColumns.has(mappedHeader)) {
+                return;
+              }
               if (mappedHeader === "points_balance" || mappedHeader === "legacy_user_id") {
                 record[mappedHeader] = Math.floor(parseFloat(value.replace(/,/g, "")) || 0);
               } else {
