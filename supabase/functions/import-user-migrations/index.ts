@@ -137,28 +137,35 @@ serve(async (req) => {
             }
           });
           
-          if (record.email && record.email.includes("@")) {
-            migrationRecords.push(record as MigrationRecord);
-          } else {
+          // Accept all records, track invalid emails
+          if (!record.email || !record.email.includes("@")) {
             invalidEmailCount++;
+            // Generate placeholder email if missing
+            if (!record.email) {
+              record.email = `no-email-${Date.now()}-${i}@placeholder.invalid`;
+            }
           }
+          migrationRecords.push(record as MigrationRecord);
         }
       } else {
         // Parse get24 format without headers (positional)
         for (let i = 0; i < lines.length; i++) {
           const values = parseCSVLine(lines[i]);
           
-          const email = cleanValue(values[GET24_COLUMN_MAP.email]);
-          if (!email || !email.includes("@")) {
+          let email = cleanValue(values[GET24_COLUMN_MAP.email]);
+          const hasValidEmail = email && email.includes("@");
+          
+          if (!hasValidEmail) {
             invalidEmailCount++;
-            continue;
+            // Generate placeholder email if missing/invalid
+            email = `no-email-${Date.now()}-${i}@placeholder.invalid`;
           }
           
           const pointsRaw = cleanValue(values[GET24_COLUMN_MAP.points_balance]);
           const points = Math.floor(parseFloat(pointsRaw?.replace(/,/g, "") || "0") || 0);
           
           const record: MigrationRecord = {
-            email,
+            email: email!,
             last_name: cleanValue(values[GET24_COLUMN_MAP.last_name]),
             first_name: cleanValue(values[GET24_COLUMN_MAP.first_name]),
             display_name: `${cleanValue(values[GET24_COLUMN_MAP.last_name]) || ""} ${cleanValue(values[GET24_COLUMN_MAP.first_name]) || ""}`.trim() || undefined,
@@ -175,7 +182,7 @@ serve(async (req) => {
         }
       }
       
-      console.log(`Parsed ${migrationRecords.length} valid records, ${invalidEmailCount} invalid emails from ${totalLinesProcessed} data lines`);
+      console.log(`Parsed ${migrationRecords.length} records (${invalidEmailCount} with invalid/missing emails) from ${totalLinesProcessed} data lines`);
     } else if (records && Array.isArray(records)) {
       migrationRecords = records;
       totalLinesProcessed = records.length;
