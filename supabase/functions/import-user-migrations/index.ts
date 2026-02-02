@@ -170,14 +170,25 @@ serve(async (req) => {
       });
     }
 
+    // Deduplicate records by email (keep the last occurrence)
+    const emailMap = new Map<string, MigrationRecord>();
+    for (const record of migrationRecords) {
+      const normalizedEmail = record.email.toLowerCase().trim();
+      emailMap.set(normalizedEmail, record);
+    }
+    const uniqueRecords = Array.from(emailMap.values());
+    const duplicatesRemoved = migrationRecords.length - uniqueRecords.length;
+
+    console.log(`Deduplication: ${migrationRecords.length} -> ${uniqueRecords.length} (removed ${duplicatesRemoved} duplicates)`);
+
     // Batch insert (500 records at a time)
     const BATCH_SIZE = 500;
     let inserted = 0;
     let skipped = 0;
     const errors: string[] = [];
 
-    for (let i = 0; i < migrationRecords.length; i += BATCH_SIZE) {
-      const batch = migrationRecords.slice(i, i + BATCH_SIZE).map(record => ({
+    for (let i = 0; i < uniqueRecords.length; i += BATCH_SIZE) {
+      const batch = uniqueRecords.slice(i, i + BATCH_SIZE).map(record => ({
         ...record,
         tenant_id,
         is_applied: false,
@@ -202,8 +213,10 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         total_records: migrationRecords.length,
+        unique_records: uniqueRecords.length,
+        duplicates_in_file: duplicatesRemoved,
         inserted,
-        skipped: migrationRecords.length - inserted,
+        skipped: uniqueRecords.length - inserted,
         errors: errors.length > 0 ? errors : undefined,
       }),
       {
