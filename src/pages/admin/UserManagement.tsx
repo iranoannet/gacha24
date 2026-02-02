@@ -1,5 +1,5 @@
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Users, MessageSquare, Plus, Minus, Send } from "lucide-react";
+import { Search, Users, MessageSquare, Plus, Minus, Send, Clock, UserCheck } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,11 +39,24 @@ interface ProfileWithEmail {
   tenant_id: string | null;
 }
 
+interface MigrationUser {
+  id: string;
+  email: string;
+  display_name: string | null;
+  points_balance: number | null;
+  is_applied: boolean | null;
+  created_at: string | null;
+  phone_number: string | null;
+  last_name: string | null;
+  first_name: string | null;
+}
+
 export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<ProfileWithEmail | null>(null);
   const [pointAdjustment, setPointAdjustment] = useState(0);
   const [newNote, setNewNote] = useState("");
+  const [activeTab, setActiveTab] = useState("active");
   const queryClient = useQueryClient();
   const { user: adminUser } = useAuth();
   const { tenant } = useTenant();
@@ -64,6 +78,25 @@ export default function UserManagement() {
       if (error) throw error;
       return data as ProfileWithEmail[];
     },
+  });
+
+  // Fetch pending migration users
+  const { data: pendingMigrations, isLoading: migrationsLoading } = useQuery({
+    queryKey: ["admin-pending-migrations", tenant?.id],
+    queryFn: async () => {
+      if (!tenant?.id) return [];
+      
+      const { data, error } = await supabase
+        .from("user_migrations")
+        .select("id, email, display_name, points_balance, is_applied, created_at, phone_number, last_name, first_name")
+        .eq("tenant_id", tenant.id)
+        .eq("is_applied", false)
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data as MigrationUser[];
+    },
+    enabled: !!tenant?.id,
   });
 
   const { data: userRoles } = useQuery({
@@ -198,6 +231,20 @@ export default function UserManagement() {
     );
   });
 
+  const filteredMigrations = pendingMigrations?.filter((m) => {
+    if (!searchQuery) return true;
+    const search = searchQuery.toLowerCase();
+    return (
+      m.display_name?.toLowerCase().includes(search) ||
+      m.email?.toLowerCase().includes(search) ||
+      m.last_name?.toLowerCase().includes(search) ||
+      m.first_name?.toLowerCase().includes(search)
+    );
+  });
+
+  const activeCount = filteredProfiles?.length || 0;
+  const pendingCount = filteredMigrations?.length || 0;
+
   return (
     <AdminLayout title="ユーザー管理">
       <div className="space-y-6">
@@ -211,76 +258,161 @@ export default function UserManagement() {
           />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              ユーザー一覧 ({filteredProfiles?.length || 0})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <p className="text-muted-foreground">読み込み中...</p>
-            ) : filteredProfiles?.length === 0 ? (
-              <p className="text-muted-foreground">ユーザーがいません</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>表示名</TableHead>
-                      <TableHead>メール</TableHead>
-                      <TableHead>ロール</TableHead>
-                      <TableHead>ポイント</TableHead>
-                      <TableHead>総課金額</TableHead>
-                      <TableHead>今月課金</TableHead>
-                      <TableHead>最終ログイン</TableHead>
-                      <TableHead>操作</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProfiles?.map((profile) => {
-                      const stats = getUserStats(profile.user_id);
-                      const role = getUserRole(profile.user_id);
-                      return (
-                        <TableRow key={profile.id}>
-                          <TableCell className="font-medium">
-                            {profile.display_name || "未設定"}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {profile.email || "-"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={role === "admin" ? "default" : "secondary"}>
-                              {role}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{profile.points_balance.toLocaleString()}pt</TableCell>
-                          <TableCell>¥{stats.totalPaid.toLocaleString()}</TableCell>
-                          <TableCell>¥{stats.monthlyPaid.toLocaleString()}</TableCell>
-                          <TableCell className="text-xs">
-                            {profile.last_login_at
-                              ? new Date(profile.last_login_at).toLocaleString("ja-JP")
-                              : "-"}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setSelectedUser(profile)}
-                            >
-                              <MessageSquare className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="active" className="flex items-center gap-2">
+              <UserCheck className="w-4 h-4" />
+              登録済み ({activeCount})
+            </TabsTrigger>
+            <TabsTrigger value="pending" className="flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              移行待ち ({pendingCount})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="active">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  ユーザー一覧 ({activeCount})
+                </CardTitle>
+                <CardDescription>
+                  ログイン済みのアクティブユーザー
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <p className="text-muted-foreground">読み込み中...</p>
+                ) : filteredProfiles?.length === 0 ? (
+                  <p className="text-muted-foreground">ユーザーがいません</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>表示名</TableHead>
+                          <TableHead>メール</TableHead>
+                          <TableHead>ロール</TableHead>
+                          <TableHead>ポイント</TableHead>
+                          <TableHead>総課金額</TableHead>
+                          <TableHead>今月課金</TableHead>
+                          <TableHead>最終ログイン</TableHead>
+                          <TableHead>操作</TableHead>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredProfiles?.map((profile) => {
+                          const stats = getUserStats(profile.user_id);
+                          const role = getUserRole(profile.user_id);
+                          return (
+                            <TableRow key={profile.id}>
+                              <TableCell className="font-medium">
+                                {profile.display_name || "未設定"}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {profile.email || "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={role === "admin" ? "default" : "secondary"}>
+                                  {role}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{profile.points_balance.toLocaleString()}pt</TableCell>
+                              <TableCell>¥{stats.totalPaid.toLocaleString()}</TableCell>
+                              <TableCell>¥{stats.monthlyPaid.toLocaleString()}</TableCell>
+                              <TableCell className="text-xs">
+                                {profile.last_login_at
+                                  ? new Date(profile.last_login_at).toLocaleString("ja-JP")
+                                  : "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setSelectedUser(profile)}
+                                >
+                                  <MessageSquare className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="pending">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  移行待ちユーザー ({pendingCount})
+                </CardTitle>
+                <CardDescription>
+                  旧システムからインポート済み、初回ログイン待ち
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {migrationsLoading ? (
+                  <p className="text-muted-foreground">読み込み中...</p>
+                ) : filteredMigrations?.length === 0 ? (
+                  <p className="text-muted-foreground">移行待ちユーザーはいません</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>表示名</TableHead>
+                          <TableHead>メール</TableHead>
+                          <TableHead>引継ぎポイント</TableHead>
+                          <TableHead>電話番号</TableHead>
+                          <TableHead>インポート日</TableHead>
+                          <TableHead>ステータス</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredMigrations?.map((migration) => (
+                          <TableRow key={migration.id}>
+                            <TableCell className="font-medium">
+                              {migration.display_name || 
+                               `${migration.last_name || ""} ${migration.first_name || ""}`.trim() || 
+                               "未設定"}
+                            </TableCell>
+                            <TableCell className="text-xs font-mono">
+                              {migration.email}
+                            </TableCell>
+                            <TableCell className="text-primary font-medium">
+                              {(migration.points_balance || 0).toLocaleString()}pt
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {migration.phone_number || "-"}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {migration.created_at
+                                ? new Date(migration.created_at).toLocaleDateString("ja-JP")
+                                : "-"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-muted-foreground">
+                                <Clock className="w-3 h-3 mr-1" />
+                                待機中
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* User Detail Dialog */}
