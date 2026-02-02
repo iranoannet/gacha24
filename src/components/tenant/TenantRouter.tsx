@@ -46,6 +46,7 @@ import UserManagement from "@/pages/admin/UserManagement";
 import Analytics from "@/pages/admin/Analytics";
 import BannerManagement from "@/pages/admin/BannerManagement";
 import UserMigration from "@/pages/admin/UserMigration";
+import SupportChat from "@/pages/admin/SupportChat";
 import { AdminProtectedRoute } from "@/components/admin/AdminProtectedRoute";
 
 /**
@@ -96,6 +97,7 @@ export function TenantRouter() {
         <Route path="/admin/users" element={<AdminProtectedRoute><UserManagement /></AdminProtectedRoute>} />
         <Route path="/admin/analytics" element={<AdminProtectedRoute><Analytics /></AdminProtectedRoute>} />
         <Route path="/admin/migration" element={<AdminProtectedRoute><UserMigration /></AdminProtectedRoute>} />
+        <Route path="/admin/support" element={<AdminProtectedRoute><SupportChat /></AdminProtectedRoute>} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>
