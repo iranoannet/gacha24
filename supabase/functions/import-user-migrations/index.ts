@@ -22,17 +22,19 @@ interface MigrationRecord {
 }
 
 // Column indices for get24 CSV format (0-indexed)
-// Format: ID, 姓, 名, ミドルネーム, ?, 郵便番号, 国/都道府県, NULL, ?, 市区町村, 住所1, 住所2, ?, ポイント, 電話, メール, ...
+// Format: ID(0), 姓(1), 名(2), ミドルネーム(3), 国コード(4), ?(5), 国名(6), NULL(7), 都道府県コード(8), 市区町村(9), 住所1(10), 住所2(11), 郵便番号(12), ポイント(13), 電話(14), メール(15), ...
 const GET24_COLUMN_MAP = {
   legacy_user_id: 0,
   last_name: 1,
   first_name: 2,
   // middle_name: 3, // Not stored in user_migrations
-  postal_code: 5,
-  prefecture: 6,  // 日本 or prefecture name
+  // country_code: 4, // Not needed (e.g., 75)
+  // country_name: 6, // Skip (日本)
+  // prefecture_code: 8, // Not needed (99 = その他)
   city: 9,
   address_line1: 10,
   address_line2: 11,
+  postal_code: 12,  // 郵便番号 (corrected from 5)
   points_balance: 13,
   phone_number: 14,
   email: 15,
@@ -200,7 +202,6 @@ serve(async (req) => {
             points_balance: points,
             phone_number: cleanValue(values[GET24_COLUMN_MAP.phone_number]),
             postal_code: cleanValue(values[GET24_COLUMN_MAP.postal_code]),
-            prefecture: cleanValue(values[GET24_COLUMN_MAP.prefecture]),
             city: cleanValue(values[GET24_COLUMN_MAP.city]),
             address_line1: cleanValue(values[GET24_COLUMN_MAP.address_line1]),
             address_line2: cleanValue(values[GET24_COLUMN_MAP.address_line2]),
