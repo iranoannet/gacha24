@@ -48,7 +48,11 @@ import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
 import TenantManagement from "./pages/super-admin/TenantManagement";
 import AllUsersManagement from "./pages/super-admin/AllUsersManagement";
 import GlobalAnalytics from "./pages/super-admin/GlobalAnalytics";
+import SupportTickets from "./pages/super-admin/SupportTickets";
 import { SuperAdminProtectedRoute } from "@/components/super-admin/SuperAdminProtectedRoute";
+
+// Admin Support
+import SupportChat from "./pages/admin/SupportChat";
 
 const queryClient = new QueryClient();
 
@@ -94,12 +98,14 @@ const App = () => (
               <Route path="/admin/users" element={<AdminProtectedRoute><UserManagement /></AdminProtectedRoute>} />
               <Route path="/admin/analytics" element={<AdminProtectedRoute><Analytics /></AdminProtectedRoute>} />
               <Route path="/admin/migration" element={<AdminProtectedRoute><UserMigration /></AdminProtectedRoute>} />
+              <Route path="/admin/support" element={<AdminProtectedRoute><SupportChat /></AdminProtectedRoute>} />
               
               {/* Super Admin Routes - Protected */}
               <Route path="/super-admin" element={<SuperAdminProtectedRoute><SuperAdminDashboard /></SuperAdminProtectedRoute>} />
               <Route path="/super-admin/tenants" element={<SuperAdminProtectedRoute><TenantManagement /></SuperAdminProtectedRoute>} />
               <Route path="/super-admin/users" element={<SuperAdminProtectedRoute><AllUsersManagement /></SuperAdminProtectedRoute>} />
               <Route path="/super-admin/analytics" element={<SuperAdminProtectedRoute><GlobalAnalytics /></SuperAdminProtectedRoute>} />
+              <Route path="/super-admin/tickets" element={<SuperAdminProtectedRoute><SupportTickets /></SuperAdminProtectedRoute>} />
               
               {/* Tenant-specific routes: /:tenantSlug/* */}
               <Route path="/:tenantSlug/*" element={<TenantRouter />} />

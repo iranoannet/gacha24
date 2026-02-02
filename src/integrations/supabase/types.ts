@@ -512,6 +512,88 @@ export type Database = {
           },
         ]
       }
+      support_messages: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          sender_id: string
+          sender_type: string
+          ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          sender_id: string
+          sender_type: string
+          ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          sender_id?: string
+          sender_type?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_cost: number | null
+          id: string
+          is_paid: boolean | null
+          status: Database["public"]["Enums"]["ticket_status"]
+          tenant_id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_cost?: number | null
+          id?: string
+          is_paid?: boolean | null
+          status?: Database["public"]["Enums"]["ticket_status"]
+          tenant_id: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_cost?: number | null
+          id?: string
+          is_paid?: boolean | null
+          status?: Database["public"]["Enums"]["ticket_status"]
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           allowed_ips: string[] | null
@@ -765,6 +847,7 @@ export type Database = {
       card_rarity: "S" | "A" | "B" | "C" | "D"
       gacha_status: "draft" | "active" | "sold_out" | "archived"
       prize_tier: "S" | "A" | "B" | "miss"
+      ticket_status: "pending" | "in_progress" | "completed" | "cancelled"
       transaction_status: "pending" | "completed" | "error"
     }
     CompositeTypes: {
@@ -900,6 +983,7 @@ export const Constants = {
       card_rarity: ["S", "A", "B", "C", "D"],
       gacha_status: ["draft", "active", "sold_out", "archived"],
       prize_tier: ["S", "A", "B", "miss"],
+      ticket_status: ["pending", "in_progress", "completed", "cancelled"],
       transaction_status: ["pending", "completed", "error"],
     },
   },
