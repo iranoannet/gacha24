@@ -229,10 +229,11 @@ export default function UserMigration() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <div className="flex items-center justify-between">
-            <TabsList>
+            <TabsList className="flex-wrap h-auto">
               <TabsTrigger value="users">ユーザー</TabsTrigger>
               <TabsTrigger value="transactions">取引履歴</TabsTrigger>
               <TabsTrigger value="inventory">発送/変換</TabsTrigger>
+              <TabsTrigger value="shipping-history">発送履歴(legacy)</TabsTrigger>
               <TabsTrigger value="analytics">日別売上</TabsTrigger>
               <TabsTrigger value="status">ステータス</TabsTrigger>
             </TabsList>
@@ -254,6 +255,7 @@ test@example.com,5000,山田,太郎,090-1234-5678,123-4567`}
               formatHelp={
                 <ul className="text-xs space-y-1 text-muted-foreground">
                   <li><code className="bg-muted px-1">email</code> - メールアドレス（必須）</li>
+                  <li><code className="bg-muted px-1">legacy_user_id</code> - 旧システムのユーザーID（発送履歴紐付け用）</li>
                   <li><code className="bg-muted px-1">points_balance</code> - ポイント残高</li>
                   <li><code className="bg-muted px-1">last_name / first_name</code> - 姓・名</li>
                   <li><code className="bg-muted px-1">phone_number</code> - 電話番号</li>
@@ -284,9 +286,9 @@ test@example.com,新春ガチャ,3,1500,2024-01-15`}
                 </ul>
               }
             />
-            <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
+            <Card className="border-yellow-500/50 bg-yellow-50/50 dark:bg-yellow-950/20">
               <CardContent className="pt-4">
-                <p className="text-sm text-amber-700 dark:text-amber-300">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
                   ⚠️ 注意: 取引履歴のインポートには、ユーザーが先にシステムに登録されている必要があります。
                   ユーザーが見つからない場合はスキップされます。
                 </p>
@@ -315,11 +317,46 @@ test@example.com,コモンカードB,conversion,completed,,50`}
                 </ul>
               }
             />
-            <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
+            <Card className="border-yellow-500/50 bg-yellow-50/50 dark:bg-yellow-950/20">
               <CardContent className="pt-4">
-                <p className="text-sm text-amber-700 dark:text-amber-300">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
                   ⚠️ 注意: ユーザーとカードが先にシステムに登録されている必要があります。
                 </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="shipping-history" className="space-y-6">
+            <CSVImporter
+              tenantId={effectiveTenantId}
+              functionName="import-shipping-history"
+              title="発送履歴CSVインポート (Legacy)"
+              description="旧システムの発送依頼履歴をインポートします。ユーザーがuser_migrationsに登録済みである必要があります。"
+              placeholder={`id,card_id,pack_card_id,num,comment,shire_state,status,created,modified
+1,1000887,9784547,1,,0,1,2024-06-15 21:01:00,2024-06-18 20:40:11`}
+              onSuccess={() => refetchInventory()}
+              formatHelp={
+                <ul className="text-xs space-y-1 text-muted-foreground">
+                  <li><code className="bg-muted px-1">id</code> - レコードID（legacy_id）</li>
+                  <li><code className="bg-muted px-1">card_id</code> - ユーザーID（旧システム）</li>
+                  <li><code className="bg-muted px-1">pack_card_id</code> - ガチャパックID</li>
+                  <li><code className="bg-muted px-1">shire_state</code> - 在庫状態（0=なし, 1=あり）</li>
+                  <li><code className="bg-muted px-1">status</code> - 発送状態（1=発送済み）</li>
+                  <li><code className="bg-muted px-1">created</code> - 依頼日時</li>
+                  <li><code className="bg-muted px-1">modified</code> - 発送日時</li>
+                </ul>
+              }
+            />
+            <Card className="border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20">
+              <CardContent className="pt-4">
+                <div className="text-sm text-blue-700 dark:text-blue-300 space-y-2">
+                  <p>⚠️ <strong>前提条件:</strong></p>
+                  <ul className="list-disc list-inside ml-2 space-y-1">
+                    <li>ユーザーCSVが先にインポートされ、<code className="bg-muted px-1">legacy_user_id</code>が設定されていること</li>
+                    <li>CSVの<code className="bg-muted px-1">card_id</code>は旧システムのユーザーIDを指します</li>
+                  </ul>
+                  <p className="mt-2">💡 <code className="bg-muted px-1">shire_state</code>は発送管理画面から後で編集できます。</p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
