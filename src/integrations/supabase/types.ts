@@ -100,7 +100,7 @@ export type Database = {
           created_at: string
           file_name: string | null
           file_size: number | null
-          gacha_id: string
+          gacha_id: string | null
           id: string
           prize_tier: string
           tenant_id: string | null
@@ -110,7 +110,7 @@ export type Database = {
           created_at?: string
           file_name?: string | null
           file_size?: number | null
-          gacha_id: string
+          gacha_id?: string | null
           id?: string
           prize_tier: string
           tenant_id?: string | null
@@ -120,7 +120,7 @@ export type Database = {
           created_at?: string
           file_name?: string | null
           file_size?: number | null
-          gacha_id?: string
+          gacha_id?: string | null
           id?: string
           prize_tier?: string
           tenant_id?: string | null
