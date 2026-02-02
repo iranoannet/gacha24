@@ -13,7 +13,8 @@ import {
   Image,
   Shield,
   Upload,
-  MessageSquare
+  MessageSquare,
+  Film
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,6 +37,7 @@ const menuItems = [
   { title: "ガチャ管理", url: "/admin/gachas", icon: Package },
   { title: "スロット編集", url: "/admin/slots", icon: Layers },
   { title: "バナー管理", url: "/admin/banners", icon: Image },
+  { title: "演出設定", url: "/admin/animations", icon: Film },
   { title: "配送管理", url: "/admin/shipping", icon: Truck },
   { title: "決済管理", url: "/admin/payments", icon: CreditCard },
   { title: "ユーザー管理", url: "/admin/users", icon: Users },
