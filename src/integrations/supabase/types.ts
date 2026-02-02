@@ -425,10 +425,13 @@ export type Database = {
           card_id: string | null
           converted_points: number | null
           id: string
+          legacy_id: number | null
+          legacy_pack_card_id: number | null
           processed_at: string | null
           requested_at: string
           slot_id: string | null
           status: Database["public"]["Enums"]["action_status"]
+          stock_status: number | null
           tenant_id: string | null
           tracking_number: string | null
           user_id: string
@@ -438,10 +441,13 @@ export type Database = {
           card_id?: string | null
           converted_points?: number | null
           id?: string
+          legacy_id?: number | null
+          legacy_pack_card_id?: number | null
           processed_at?: string | null
           requested_at?: string
           slot_id?: string | null
           status?: Database["public"]["Enums"]["action_status"]
+          stock_status?: number | null
           tenant_id?: string | null
           tracking_number?: string | null
           user_id: string
@@ -451,10 +457,13 @@ export type Database = {
           card_id?: string | null
           converted_points?: number | null
           id?: string
+          legacy_id?: number | null
+          legacy_pack_card_id?: number | null
           processed_at?: string | null
           requested_at?: string
           slot_id?: string | null
           status?: Database["public"]["Enums"]["action_status"]
+          stock_status?: number | null
           tenant_id?: string | null
           tracking_number?: string | null
           user_id?: string
