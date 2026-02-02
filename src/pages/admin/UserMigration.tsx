@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
-import { Users, Clock, UserCheck, RefreshCw, ShoppingCart, Package, CheckCircle } from "lucide-react";
+import { Users, Clock, UserCheck, RefreshCw, ShoppingCart, Package, CheckCircle, TrendingUp } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -95,6 +95,21 @@ export default function UserMigration() {
     enabled: !!effectiveTenantId,
   });
 
+  // Fetch daily analytics count
+  const { data: analyticsCount, refetch: refetchAnalytics } = useQuery({
+    queryKey: ["analytics-count", effectiveTenantId],
+    queryFn: async () => {
+      if (!effectiveTenantId) return 0;
+      const { count, error } = await supabase
+        .from("daily_analytics")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", effectiveTenantId);
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!effectiveTenantId,
+  });
+
   // Fetch recent migration records
   const { data: recentRecords, refetch: refetchRecords } = useQuery({
     queryKey: ["migration-records", effectiveTenantId],
@@ -119,6 +134,7 @@ export default function UserMigration() {
     refetchRecords();
     refetchTransactions();
     refetchInventory();
+    refetchAnalytics();
     toast.success("データを更新しました");
   };
 
@@ -148,7 +164,7 @@ export default function UserMigration() {
     <AdminLayout title="データ移行">
       <div className="space-y-6">
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">ユーザー移行</CardTitle>
@@ -183,6 +199,16 @@ export default function UserMigration() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">日別売上</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analyticsCount || 0}</div>
+              <p className="text-xs text-muted-foreground">日分</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">移行進捗</CardTitle>
               <UserCheck className="h-4 w-4 text-primary" />
             </CardHeader>
@@ -207,6 +233,7 @@ export default function UserMigration() {
               <TabsTrigger value="users">ユーザー</TabsTrigger>
               <TabsTrigger value="transactions">取引履歴</TabsTrigger>
               <TabsTrigger value="inventory">発送/変換</TabsTrigger>
+              <TabsTrigger value="analytics">日別売上</TabsTrigger>
               <TabsTrigger value="status">ステータス</TabsTrigger>
             </TabsList>
             <Button variant="outline" size="sm" onClick={handleRefresh}>
@@ -295,6 +322,28 @@ test@example.com,コモンカードB,conversion,completed,,50`}
                 </p>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-6">
+            <CSVImporter
+              tenantId={effectiveTenantId}
+              functionName="import-daily-analytics"
+              title="日別売上CSVインポート"
+              description="過去の日別売上データをインポートします"
+              placeholder={`id,date,payment,rieki,point,status,created,modified
+1,20230215,97920,-15580,113500,0,2023-02-15 00:00:00,2023-02-15 00:00:00`}
+              onSuccess={() => refetchAnalytics()}
+              formatHelp={
+                <ul className="text-xs space-y-1 text-muted-foreground">
+                  <li><code className="bg-muted px-1">id</code> - レコードID</li>
+                  <li><code className="bg-muted px-1">date</code> - 日付（YYYYMMDD形式）</li>
+                  <li><code className="bg-muted px-1">payment</code> - 売上金額</li>
+                  <li><code className="bg-muted px-1">rieki</code> - 利益</li>
+                  <li><code className="bg-muted px-1">point</code> - 使用ポイント</li>
+                  <li><code className="bg-muted px-1">status</code> - ステータス</li>
+                </ul>
+              }
+            />
           </TabsContent>
 
           <TabsContent value="status">
