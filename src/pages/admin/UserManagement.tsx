@@ -80,7 +80,25 @@ export default function UserManagement() {
     },
   });
 
-  // Fetch pending migration users
+  // Fetch pending migration count (accurate)
+  const { data: pendingMigrationCount } = useQuery({
+    queryKey: ["admin-pending-migrations-count", tenant?.id],
+    queryFn: async () => {
+      if (!tenant?.id) return 0;
+      
+      const { count, error } = await supabase
+        .from("user_migrations")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenant.id)
+        .eq("is_applied", false);
+      
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!tenant?.id,
+  });
+
+  // Fetch pending migration users (limited for display)
   const { data: pendingMigrations, isLoading: migrationsLoading } = useQuery({
     queryKey: ["admin-pending-migrations", tenant?.id],
     queryFn: async () => {
@@ -91,7 +109,8 @@ export default function UserManagement() {
         .select("id, email, display_name, points_balance, is_applied, created_at, phone_number, last_name, first_name")
         .eq("tenant_id", tenant.id)
         .eq("is_applied", false)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(100);
       
       if (error) throw error;
       return data as MigrationUser[];
@@ -243,7 +262,8 @@ export default function UserManagement() {
   });
 
   const activeCount = filteredProfiles?.length || 0;
-  const pendingCount = filteredMigrations?.length || 0;
+  const pendingCount = pendingMigrationCount || 0;
+  const displayedPendingCount = filteredMigrations?.length || 0;
 
   return (
     <AdminLayout title="ユーザー管理">
@@ -351,10 +371,11 @@ export default function UserManagement() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="w-5 h-5" />
-                  移行待ちユーザー ({pendingCount})
+                  移行待ちユーザー ({pendingCount.toLocaleString()})
                 </CardTitle>
                 <CardDescription>
                   旧システムからインポート済み、初回ログイン待ち
+                  {pendingCount > 100 && ` (最新100件を表示)`}
                 </CardDescription>
               </CardHeader>
               <CardContent>
