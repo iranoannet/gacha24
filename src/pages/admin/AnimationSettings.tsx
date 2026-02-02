@@ -4,62 +4,172 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Video, Upload, Trash2, Play, RefreshCw, Plus } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Film, Plus, Trash2, Upload, Play, ChevronDown, ChevronRight, Edit2, Check, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+
+interface AnimationPattern {
+  id: string;
+  name: string;
+  description: string | null;
+  tenant_id: string | null;
+  created_at: string;
+}
 
 interface AnimationVideo {
   id: string;
+  pattern_id: string | null;
   prize_tier: string;
   video_url: string;
   file_name: string | null;
   file_size: number | null;
-  created_at: string;
 }
 
 const PRIZE_TIERS = [
-  { value: "S", label: "S等級", color: "bg-yellow-500/20 text-yellow-500 border-yellow-500/50" },
-  { value: "A", label: "A等級", color: "bg-purple-500/20 text-purple-500 border-purple-500/50" },
-  { value: "B", label: "B等級", color: "bg-blue-500/20 text-blue-500 border-blue-500/50" },
-  { value: "miss", label: "ハズレ", color: "bg-gray-500/20 text-gray-400 border-gray-500/50" },
+  { value: "S", label: "S賞", color: "bg-yellow-500" },
+  { value: "A", label: "A賞", color: "bg-purple-500" },
+  { value: "B", label: "B賞", color: "bg-blue-500" },
+  { value: "C", label: "C賞", color: "bg-green-500" },
+  { value: "D", label: "D賞", color: "bg-gray-500" },
+  { value: "E", label: "E賞（ハズレ）", color: "bg-red-500" },
 ];
 
 export default function AnimationSettings() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
-  const [uploading, setUploading] = useState<string | null>(null);
+  const [newPatternName, setNewPatternName] = useState("");
+  const [newPatternDescription, setNewPatternDescription] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [expandedPatterns, setExpandedPatterns] = useState<Set<string>>(new Set());
+  const [uploadingTier, setUploadingTier] = useState<{ patternId: string; tier: string } | null>(null);
   const [previewVideo, setPreviewVideo] = useState<string | null>(null);
+  const [editingPattern, setEditingPattern] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
-  // Fetch tenant-wide animation videos (gacha_id = NULL for tenant-wide)
-  const { data: videos, isLoading } = useQuery({
-    queryKey: ["tenant-animation-videos", tenant?.id],
+  // Fetch patterns
+  const { data: patterns, isLoading: patternsLoading } = useQuery({
+    queryKey: ["animation-patterns", tenant?.id],
     queryFn: async () => {
       if (!tenant?.id) return [];
-      
+      const { data, error } = await supabase
+        .from("gacha_animation_patterns")
+        .select("*")
+        .eq("tenant_id", tenant.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as AnimationPattern[];
+    },
+    enabled: !!tenant?.id,
+  });
+
+  // Fetch all videos for this tenant's patterns
+  const { data: videos } = useQuery({
+    queryKey: ["animation-videos", tenant?.id],
+    queryFn: async () => {
+      if (!tenant?.id) return [];
       const { data, error } = await supabase
         .from("gacha_animation_videos")
         .select("*")
         .eq("tenant_id", tenant.id)
-        .is("gacha_id", null)
+        .not("pattern_id", "is", null)
         .order("prize_tier", { ascending: true });
-
       if (error) throw error;
       return data as AnimationVideo[];
     },
     enabled: !!tenant?.id,
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: async ({ file, prizeTier }: { file: File; prizeTier: string }) => {
-      if (!tenant?.id) throw new Error("テナント情報がありません");
+  const handleCreatePattern = async () => {
+    if (!newPatternName.trim() || !tenant?.id) {
+      toast.error("パターン名を入力してください");
+      return;
+    }
 
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${tenant.id}/global/${prizeTier}/${Date.now()}.${fileExt}`;
+    setIsCreating(true);
+    try {
+      const { error } = await supabase
+        .from("gacha_animation_patterns")
+        .insert({
+          tenant_id: tenant.id,
+          name: newPatternName.trim(),
+          description: newPatternDescription.trim() || null,
+        });
 
+      if (error) throw error;
+
+      toast.success("演出パターンを作成しました");
+      setNewPatternName("");
+      setNewPatternDescription("");
+      queryClient.invalidateQueries({ queryKey: ["animation-patterns", tenant.id] });
+    } catch (error) {
+      toast.error("作成に失敗しました");
+      console.error(error);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeletePattern = async (patternId: string) => {
+    if (!confirm("この演出パターンを削除しますか？関連する全ての動画も削除されます。")) return;
+
+    try {
+      const { error } = await supabase
+        .from("gacha_animation_patterns")
+        .delete()
+        .eq("id", patternId);
+
+      if (error) throw error;
+
+      toast.success("演出パターンを削除しました");
+      queryClient.invalidateQueries({ queryKey: ["animation-patterns", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["animation-videos", tenant?.id] });
+    } catch (error) {
+      toast.error("削除に失敗しました");
+      console.error(error);
+    }
+  };
+
+  const handleUpdatePatternName = async (patternId: string) => {
+    if (!editName.trim()) {
+      toast.error("パターン名を入力してください");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("gacha_animation_patterns")
+        .update({ name: editName.trim() })
+        .eq("id", patternId);
+
+      if (error) throw error;
+
+      toast.success("パターン名を更新しました");
+      setEditingPattern(null);
+      queryClient.invalidateQueries({ queryKey: ["animation-patterns", tenant?.id] });
+    } catch (error) {
+      toast.error("更新に失敗しました");
+      console.error(error);
+    }
+  };
+
+  const handleVideoUpload = async (patternId: string, tier: string, file: File) => {
+    if (!tenant?.id) return;
+
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error("ファイルサイズは100MB以下にしてください");
+      return;
+    }
+
+    setUploadingTier({ patternId, tier });
+
+    try {
+      const fileName = `${tenant.id}/${patternId}/${tier}/${Date.now()}_${file.name}`;
+      
       const { error: uploadError } = await supabase.storage
         .from("gacha-animations")
         .upload(fileName, file);
@@ -74,201 +184,301 @@ export default function AnimationSettings() {
         .from("gacha_animation_videos")
         .insert({
           tenant_id: tenant.id,
-          gacha_id: null, // NULL means tenant-wide
-          prize_tier: prizeTier,
+          pattern_id: patternId,
+          prize_tier: tier,
           video_url: publicUrl,
           file_name: file.name,
           file_size: file.size,
         });
 
       if (dbError) throw dbError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant-animation-videos"] });
-      toast.success("動画をアップロードしました");
-      setUploading(null);
-    },
-    onError: (error: Error) => {
-      toast.error(`アップロードエラー: ${error.message}`);
-      setUploading(null);
-    },
-  });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (video: AnimationVideo) => {
-      // Extract file path from URL
-      const urlParts = video.video_url.split("/gacha-animations/");
+      toast.success(`${tier}賞の動画をアップロードしました`);
+      queryClient.invalidateQueries({ queryKey: ["animation-videos", tenant.id] });
+    } catch (error) {
+      toast.error("アップロードに失敗しました");
+      console.error(error);
+    } finally {
+      setUploadingTier(null);
+    }
+  };
+
+  const handleDeleteVideo = async (videoId: string, videoUrl: string) => {
+    if (!confirm("この動画を削除しますか？")) return;
+
+    try {
+      const urlParts = videoUrl.split("/gacha-animations/");
       if (urlParts.length > 1) {
-        await supabase.storage.from("gacha-animations").remove([urlParts[1]]);
+        const filePath = urlParts[1];
+        await supabase.storage.from("gacha-animations").remove([filePath]);
       }
 
       const { error } = await supabase
         .from("gacha_animation_videos")
         .delete()
-        .eq("id", video.id);
+        .eq("id", videoId);
 
       if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant-animation-videos"] });
+
       toast.success("動画を削除しました");
-    },
-    onError: (error: Error) => {
-      toast.error(`削除エラー: ${error.message}`);
-    },
-  });
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, prizeTier: string) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("video/")) {
-      toast.error("動画ファイルを選択してください");
-      return;
+      queryClient.invalidateQueries({ queryKey: ["animation-videos", tenant?.id] });
+    } catch (error) {
+      toast.error("削除に失敗しました");
+      console.error(error);
     }
-
-    if (file.size > 100 * 1024 * 1024) {
-      toast.error("ファイルサイズは100MB以下にしてください");
-      return;
-    }
-
-    setUploading(prizeTier);
-    uploadMutation.mutate({ file, prizeTier });
   };
 
-  const getVideosByTier = (tier: string) => {
-    return videos?.filter((v) => v.prize_tier === tier) || [];
+  const togglePattern = (patternId: string) => {
+    setExpandedPatterns(prev => {
+      const next = new Set(prev);
+      if (next.has(patternId)) {
+        next.delete(patternId);
+      } else {
+        next.add(patternId);
+      }
+      return next;
+    });
+  };
+
+  const getVideosForPattern = (patternId: string) => {
+    return videos?.filter(v => v.pattern_id === patternId) || [];
+  };
+
+  const getVideosForTier = (patternId: string, tier: string) => {
+    return videos?.filter(v => v.pattern_id === patternId && v.prize_tier === tier) || [];
   };
 
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return "不明";
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)} MB`;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
     <AdminLayout title="演出設定">
       <div className="space-y-6">
-        {/* Header */}
+        {/* Create New Pattern */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Video className="w-5 h-5" />
-              テナント共通演出動画
+              <Plus className="h-5 w-5" />
+              新規演出パターン作成
             </CardTitle>
             <CardDescription>
-              このテナントの全ガチャで使用される演出動画を管理します。
-              各等級で複数の動画を登録すると、ランダムに1つが再生されます。
+              ガチャで使用する演出パターンを作成します。ガチャ作成時にここで登録したパターンから選択できます。
             </CardDescription>
           </CardHeader>
+          <CardContent>
+            <div className="flex gap-4 items-end flex-wrap">
+              <div className="flex-1 min-w-48">
+                <Label htmlFor="pattern-name">パターン名</Label>
+                <Input
+                  id="pattern-name"
+                  placeholder="例：炎演出、王道パチンコ風"
+                  value={newPatternName}
+                  onChange={(e) => setNewPatternName(e.target.value)}
+                />
+              </div>
+              <div className="flex-1 min-w-48">
+                <Label htmlFor="pattern-desc">説明（任意）</Label>
+                <Input
+                  id="pattern-desc"
+                  placeholder="例：高級感のある演出"
+                  value={newPatternDescription}
+                  onChange={(e) => setNewPatternDescription(e.target.value)}
+                />
+              </div>
+              <Button onClick={handleCreatePattern} disabled={isCreating || !newPatternName.trim()}>
+                <Plus className="h-4 w-4 mr-2" />
+                作成
+              </Button>
+            </div>
+          </CardContent>
         </Card>
 
-        {/* Prize Tier Cards */}
-        <div className="grid gap-6">
-          {PRIZE_TIERS.map((tier) => {
-            const tierVideos = getVideosByTier(tier.value);
-            
-            return (
-              <Card key={tier.value}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline" className={tier.color}>
-                        {tier.label}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        {tierVideos.length}件の動画
-                      </span>
-                    </div>
-                    <Label htmlFor={`upload-${tier.value}`} className="cursor-pointer">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={uploading === tier.value}
-                        asChild
-                      >
-                        <span>
-                          {uploading === tier.value ? (
-                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Plus className="w-4 h-4 mr-2" />
-                          )}
-                          動画を追加
-                        </span>
-                      </Button>
-                      <Input
-                        id={`upload-${tier.value}`}
-                        type="file"
-                        accept="video/*"
-                        className="hidden"
-                        onChange={(e) => handleFileUpload(e, tier.value)}
-                        disabled={uploading === tier.value}
-                      />
-                    </Label>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {tierVideos.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Video className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                      <p>動画がまだ登録されていません</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      {tierVideos.map((video) => (
-                        <div
-                          key={video.id}
-                          className="relative group rounded-lg border border-border bg-card overflow-hidden"
-                        >
-                          <video
-                            src={video.video_url}
-                            className="w-full aspect-video object-cover"
-                            muted
-                            preload="metadata"
-                          />
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => setPreviewVideo(video.video_url)}
-                                >
-                                  <Play className="w-4 h-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="max-w-3xl">
-                                <DialogHeader>
-                                  <DialogTitle>プレビュー - {tier.label}</DialogTitle>
-                                </DialogHeader>
-                                <video
-                                  src={video.video_url}
-                                  className="w-full aspect-video rounded-lg"
-                                  controls
-                                  autoPlay
+        {/* Pattern List */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Film className="h-5 w-5" />
+            登録済み演出パターン
+          </h2>
+
+          {patternsLoading ? (
+            <p className="text-muted-foreground">読み込み中...</p>
+          ) : patterns?.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                演出パターンがまだありません。上のフォームから作成してください。
+              </CardContent>
+            </Card>
+          ) : (
+            patterns?.map((pattern) => {
+              const patternVideos = getVideosForPattern(pattern.id);
+              const isExpanded = expandedPatterns.has(pattern.id);
+
+              return (
+                <Collapsible
+                  key={pattern.id}
+                  open={isExpanded}
+                  onOpenChange={() => togglePattern(pattern.id)}
+                >
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CollapsibleTrigger asChild>
+                          <button className="flex items-center gap-3 text-left hover:opacity-80">
+                            {isExpanded ? (
+                              <ChevronDown className="h-5 w-5" />
+                            ) : (
+                              <ChevronRight className="h-5 w-5" />
+                            )}
+                            {editingPattern === pattern.id ? (
+                              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                <Input
+                                  value={editName}
+                                  onChange={(e) => setEditName(e.target.value)}
+                                  className="h-8 w-48"
+                                  autoFocus
                                 />
-                              </DialogContent>
-                            </Dialog>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleUpdatePatternName(pattern.id)}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setEditingPattern(null)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div>
+                                <CardTitle className="text-base">{pattern.name}</CardTitle>
+                                {pattern.description && (
+                                  <CardDescription className="text-sm">{pattern.description}</CardDescription>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        </CollapsibleTrigger>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">
+                            {patternVideos.length} 動画
+                          </Badge>
+                          {editingPattern !== pattern.id && (
                             <Button
-                              variant="destructive"
                               size="sm"
-                              onClick={() => deleteMutation.mutate(video)}
-                              disabled={deleteMutation.isPending}
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingPattern(pattern.id);
+                                setEditName(pattern.name);
+                              }}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Edit2 className="h-4 w-4" />
                             </Button>
-                          </div>
-                          <div className="p-2 text-xs text-muted-foreground truncate">
-                            {video.file_name || "不明なファイル"} ({formatFileSize(video.file_size)})
-                          </div>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => handleDeletePattern(pattern.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+                      </div>
+                    </CardHeader>
+
+                    <CollapsibleContent>
+                      <CardContent className="pt-0">
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                          {PRIZE_TIERS.map((tier) => {
+                            const tierVideos = getVideosForTier(pattern.id, tier.value);
+                            const isUploading = uploadingTier?.patternId === pattern.id && uploadingTier?.tier === tier.value;
+
+                            return (
+                              <Card key={tier.value} className="bg-muted/30">
+                                <CardHeader className="pb-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-3 h-3 rounded-full ${tier.color}`} />
+                                      <span className="font-medium">{tier.label}</span>
+                                    </div>
+                                    <Badge variant="secondary">{tierVideos.length}本</Badge>
+                                  </div>
+                                </CardHeader>
+                                <CardContent className="space-y-2">
+                                  {tierVideos.map((video) => (
+                                    <div
+                                      key={video.id}
+                                      className="flex items-center justify-between p-2 bg-background rounded-md text-sm"
+                                    >
+                                      <div className="truncate flex-1 mr-2">
+                                        <p className="truncate">{video.file_name || "動画"}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {formatFileSize(video.file_size)}
+                                        </p>
+                                      </div>
+                                      <div className="flex gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => setPreviewVideo(video.video_url)}
+                                        >
+                                          <Play className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="text-destructive"
+                                          onClick={() => handleDeleteVideo(video.id, video.video_url)}
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+
+                                  <label className="flex items-center justify-center gap-2 p-2 border-2 border-dashed rounded-md cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors">
+                                    <input
+                                      type="file"
+                                      accept="video/mp4,video/webm"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                          handleVideoUpload(pattern.id, tier.value, file);
+                                        }
+                                        e.target.value = "";
+                                      }}
+                                      disabled={isUploading}
+                                    />
+                                    {isUploading ? (
+                                      <span className="text-sm text-muted-foreground">アップロード中...</span>
+                                    ) : (
+                                      <>
+                                        <Upload className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-sm text-muted-foreground">追加</span>
+                                      </>
+                                    )}
+                                  </label>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              );
+            })
+          )}
         </div>
 
         {/* Info Card */}
@@ -276,13 +486,30 @@ export default function AnimationSettings() {
           <CardContent className="pt-6">
             <h4 className="font-medium mb-2">使用方法</h4>
             <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• 各等級に複数の動画を登録すると、ガチャ結果時にランダムで1つが再生されます</li>
+              <li>• 演出パターンを作成し、各賞ごとに動画をアップロードします</li>
+              <li>• 同じ賞に複数の動画を登録すると、ランダムで1つが再生されます</li>
+              <li>• ガチャ作成時に、使用する演出パターンを選択します</li>
               <li>• 推奨フォーマット: MP4 (H.264), 最大100MB</li>
-              <li>• 動画が登録されていない等級は、デフォルトのアニメーションが使用されます</li>
-              <li>• ガチャ個別に演出を設定したい場合は、ガチャ管理から個別設定できます</li>
             </ul>
           </CardContent>
         </Card>
+
+        {/* Video Preview Dialog */}
+        <Dialog open={!!previewVideo} onOpenChange={() => setPreviewVideo(null)}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>動画プレビュー</DialogTitle>
+            </DialogHeader>
+            {previewVideo && (
+              <video
+                src={previewVideo}
+                controls
+                autoPlay
+                className="w-full rounded-lg"
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );
