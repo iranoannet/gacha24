@@ -36,6 +36,7 @@ interface BatchProgress {
   totalRecords: number;
   insertedTotal: number;
   skippedTotal: number;
+  duplicatesRemovedTotal: number;
   errors: string[];
   status: "idle" | "running" | "paused" | "completed" | "stopped";
 }
@@ -53,6 +54,7 @@ export default function UserMigration() {
     totalRecords: 0,
     insertedTotal: 0,
     skippedTotal: 0,
+    duplicatesRemovedTotal: 0,
     errors: [],
     status: "idle",
   });
@@ -192,6 +194,7 @@ export default function UserMigration() {
       totalRecords,
       insertedTotal: 0,
       skippedTotal: 0,
+      duplicatesRemovedTotal: 0,
       errors: [],
       status: "running",
     });
@@ -199,6 +202,7 @@ export default function UserMigration() {
     setIsLoading(true);
     let insertedTotal = 0;
     let skippedTotal = 0;
+    let duplicatesRemovedTotal = 0;
     const allErrors: string[] = [];
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -244,6 +248,7 @@ export default function UserMigration() {
         } else if (response.data) {
           insertedTotal += response.data.inserted || 0;
           skippedTotal += response.data.skipped || 0;
+          duplicatesRemovedTotal += response.data.duplicates_in_file || 0;
           if (response.data.errors) {
             allErrors.push(...response.data.errors);
           }
@@ -260,6 +265,7 @@ export default function UserMigration() {
         totalRecords,
         insertedTotal,
         skippedTotal,
+        duplicatesRemovedTotal,
         errors: allErrors,
         status: batchIndex + 1 === totalBatches ? "completed" : "running",
       });
@@ -466,7 +472,7 @@ test@example.com,5000,山田,太郎,090-1234-5678,123-4567,東京都,渋谷区,�
                         className="h-3"
                       />
                       
-                      <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                      <div className="grid grid-cols-5 gap-2 text-center text-sm">
                         <div>
                           <p className="text-lg font-bold">{batchProgress.processedRecords.toLocaleString()}</p>
                           <p className="text-xs text-muted-foreground">処理済み</p>
@@ -482,6 +488,10 @@ test@example.com,5000,山田,太郎,090-1234-5678,123-4567,東京都,渋谷区,�
                         <div>
                           <p className="text-lg font-bold text-muted-foreground">{batchProgress.skippedTotal.toLocaleString()}</p>
                           <p className="text-xs text-muted-foreground">スキップ</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold text-orange-500">{batchProgress.duplicatesRemovedTotal.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">重複除去</p>
                         </div>
                       </div>
 
