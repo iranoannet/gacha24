@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SuperAdminLayout } from "@/components/super-admin/SuperAdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -22,70 +21,69 @@ import { ja } from "date-fns/locale";
 
 type DataType = "users" | "transactions" | "inventory" | "daily-sales" | "shipping-history" | "unknown";
 
-interface DetectedFormat {
-  type: DataType;
-  label: string;
-  functionName: string;
-  description: string;
-}
-
-const DATA_FORMATS: Record<Exclude<DataType, "unknown">, DetectedFormat> = {
+const DATA_FORMATS: Record<Exclude<DataType, "unknown">, { label: string; functionName: string; description: string }> = {
   "users": {
-    type: "users",
     label: "ユーザー",
     functionName: "import-user-migrations",
-    description: "email, points_balance, display_name などを含むユーザー情報",
+    description: "ユーザー情報（email, points等）",
   },
   "transactions": {
-    type: "transactions",
     label: "取引履歴",
     functionName: "import-transactions",
-    description: "user_email, total_spent_points などを含む購入履歴",
+    description: "購入履歴",
   },
   "inventory": {
-    type: "inventory",
     label: "発送/変換",
     functionName: "import-inventory",
-    description: "pack_id, card_id, user_id, status などを含むガチャ結果データ",
+    description: "pack_cards形式のガチャ結果",
   },
   "daily-sales": {
-    type: "daily-sales",
     label: "日別売上",
     functionName: "import-daily-analytics",
-    description: "date, payment_amount, profit などを含む売上集計データ",
+    description: "日別の売上・粗利データ",
   },
   "shipping-history": {
-    type: "shipping-history",
     label: "発送履歴",
     functionName: "import-shipping-history",
-    description: "tracking_number, shipped_at などを含む発送記録",
+    description: "発送記録",
   },
 };
 
 function detectDataType(headers: string[]): DataType {
-  const headerSet = new Set(headers.map(h => h.toLowerCase().trim()));
+  const headerLower = headers.map(h => h.toLowerCase().replace(/"/g, "").trim());
+  const headerStr = headerLower.join(",");
   
-  if (headerSet.has("pack_id") || (headerSet.has("card_id") && headerSet.has("user_id") && headerSet.has("status"))) {
+  // pack_cards: id,pack_id,card_id,user_id...
+  if (headerStr.includes("pack_id") || 
+      (headerStr.includes("card_id") && headerStr.includes("user_id"))) {
     return "inventory";
   }
   
-  if (headerSet.has("payment") || headerSet.has("payment_amount") || 
-      (headerSet.has("date") && (headerSet.has("profit") || headerSet.has("points_used")))) {
+  // day_datas: id,date,payment,profit,points_used,status
+  if (headerStr.includes("payment") || headerStr.includes("profit")) {
     return "daily-sales";
   }
   
-  if ((headerSet.has("email") || headerSet.has("mail")) && 
-      (headerSet.has("points_balance") || headerSet.has("availablepoint") || headerSet.has("lastname"))) {
+  // users: email/mail + points/name/address
+  if ((headerStr.includes("email") || headerStr.includes("mail")) && 
+      (headerStr.includes("point") || headerStr.includes("name") || headerStr.includes("address"))) {
     return "users";
   }
   
-  if (headerSet.has("user_email") && headerSet.has("total_spent_points")) {
+  // transactions
+  if (headerStr.includes("user_email") && headerStr.includes("spent")) {
     return "transactions";
   }
   
-  if (headerSet.has("tracking_number") || headerSet.has("shipped_at") || headerSet.has("shire_state")) {
+  // shipping
+  if (headerStr.includes("tracking") || headerStr.includes("shipped") || headerStr.includes("shire")) {
     return "shipping-history";
   }
+  
+  // Fallback: check column count for positional CSVs
+  const colCount = headers.length;
+  if (colCount === 6 && headers[0]?.match(/^\d+$/)) return "daily-sales";
+  if (colCount >= 15 && headers[0]?.match(/^\d+$/)) return "inventory";
   
   return "unknown";
 }
@@ -95,14 +93,10 @@ interface FileQueueItem {
   file: File;
   content: string;
   detectedType: DataType;
+  selectedType: DataType;
   status: "pending" | "processing" | "completed" | "failed";
   progress: number;
-  result?: {
-    inserted: number;
-    skipped: number;
-    failed: number;
-    total: number;
-  };
+  result?: { inserted: number; skipped: number; failed: number; total: number };
   error?: string;
 }
 
@@ -112,7 +106,6 @@ export default function DataMigration() {
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [fileQueue, setFileQueue] = useState<FileQueueItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const controlRef = useRef<{ paused: boolean; stopped: boolean }>({ paused: false, stopped: false });
   const queryClient = useQueryClient();
 
@@ -137,7 +130,7 @@ export default function DataMigration() {
         .select("*")
         .eq("tenant_id", selectedTenantId)
         .order("imported_at", { ascending: false })
-        .limit(50);
+        .limit(100);
       if (error) throw error;
       return data;
     },
@@ -163,6 +156,7 @@ export default function DataMigration() {
         file,
         content,
         detectedType,
+        selectedType: detectedType, // User can change this
         status: "pending",
         progress: 0,
       });
@@ -170,9 +164,11 @@ export default function DataMigration() {
     
     setFileQueue(prev => [...prev, ...newItems]);
     toast.success(`${files.length}件のファイルを追加しました`);
-    
-    // Reset input
     e.target.value = "";
+  }, []);
+
+  const updateFileType = useCallback((id: string, type: DataType) => {
+    setFileQueue(prev => prev.map(f => f.id === id ? { ...f, selectedType: type } : f));
   }, []);
 
   const removeFile = useCallback((id: string) => {
@@ -185,11 +181,10 @@ export default function DataMigration() {
 
   const saveImportHistory = async (item: FileQueueItem) => {
     const { data: user } = await supabase.auth.getUser();
-    
     await supabase.from("import_history").insert({
       tenant_id: selectedTenantId,
       file_name: item.file.name,
-      data_type: item.detectedType,
+      data_type: item.selectedType,
       records_processed: item.result?.total || 0,
       records_inserted: item.result?.inserted || 0,
       records_skipped: item.result?.skipped || 0,
@@ -198,33 +193,28 @@ export default function DataMigration() {
       imported_by: user.user?.id,
       error_summary: item.error,
     });
-    
     queryClient.invalidateQueries({ queryKey: ["import-history", selectedTenantId] });
   };
 
   const processFile = async (item: FileQueueItem): Promise<FileQueueItem> => {
-    if (item.detectedType === "unknown") {
-      return { ...item, status: "failed", error: "データ形式を判別できません" };
+    if (item.selectedType === "unknown") {
+      return { ...item, status: "failed", error: "データ形式を選択してください" };
     }
 
-    const format = DATA_FORMATS[item.detectedType];
+    const format = DATA_FORMATS[item.selectedType];
     const lines = item.content.trim().split("\n").filter(line => line.trim());
     const header = lines[0];
     const dataLines = lines.slice(1);
     const totalRecords = dataLines.length;
     const totalBatches = Math.ceil(totalRecords / BATCH_SIZE);
 
-    let inserted = 0;
-    let skipped = 0;
-    let failed = 0;
+    let inserted = 0, skipped = 0, failed = 0;
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
       if (controlRef.current.stopped) break;
-      
       while (controlRef.current.paused && !controlRef.current.stopped) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
-      
       if (controlRef.current.stopped) break;
 
       const startIdx = batchIndex * BATCH_SIZE;
@@ -249,9 +239,7 @@ export default function DataMigration() {
       }
 
       const progress = Math.round(((batchIndex + 1) / totalBatches) * 100);
-      setFileQueue(prev => prev.map(f => 
-        f.id === item.id ? { ...f, progress } : f
-      ));
+      setFileQueue(prev => prev.map(f => f.id === item.id ? { ...f, progress } : f));
 
       if (batchIndex < totalBatches - 1) {
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -272,9 +260,9 @@ export default function DataMigration() {
       return;
     }
 
-    const pendingFiles = fileQueue.filter(f => f.status === "pending");
+    const pendingFiles = fileQueue.filter(f => f.status === "pending" && f.selectedType !== "unknown");
     if (pendingFiles.length === 0) {
-      toast.info("処理するファイルがありません");
+      toast.info("処理するファイルがありません（データ形式を選択してください）");
       return;
     }
 
@@ -283,21 +271,12 @@ export default function DataMigration() {
 
     for (let i = 0; i < fileQueue.length; i++) {
       const item = fileQueue[i];
-      if (item.status !== "pending") continue;
+      if (item.status !== "pending" || item.selectedType === "unknown") continue;
       if (controlRef.current.stopped) break;
 
-      setCurrentFileIndex(i);
-      setFileQueue(prev => prev.map((f, idx) => 
-        idx === i ? { ...f, status: "processing" } : f
-      ));
-
+      setFileQueue(prev => prev.map((f, idx) => idx === i ? { ...f, status: "processing" } : f));
       const result = await processFile(item);
-      
-      setFileQueue(prev => prev.map((f, idx) => 
-        idx === i ? result : f
-      ));
-
-      // Save to history
+      setFileQueue(prev => prev.map((f, idx) => idx === i ? result : f));
       await saveImportHistory(result);
     }
 
@@ -306,68 +285,55 @@ export default function DataMigration() {
     toast.success("インポート完了");
   };
 
-  const handlePause = () => {
-    controlRef.current.paused = true;
-  };
+  const handlePause = () => { controlRef.current.paused = true; };
+  const handleResume = () => { controlRef.current.paused = false; };
+  const handleStop = () => { controlRef.current.stopped = true; controlRef.current.paused = false; };
 
-  const handleResume = () => {
-    controlRef.current.paused = false;
-  };
-
-  const handleStop = () => {
-    controlRef.current.stopped = true;
-    controlRef.current.paused = false;
-  };
-
-  // Group queue by data type
-  const groupedQueue = fileQueue.reduce((acc, item) => {
-    const type = item.detectedType;
-    if (!acc[type]) acc[type] = [];
-    acc[type].push(item);
-    return acc;
-  }, {} as Record<DataType, FileQueueItem[]>);
+  const pendingCount = fileQueue.filter(f => f.status === "pending" && f.selectedType !== "unknown").length;
+  const unknownCount = fileQueue.filter(f => f.selectedType === "unknown").length;
+  const processingFile = fileQueue.find(f => f.status === "processing");
 
   // Group history by data type
   const groupedHistory = (importHistory || []).reduce((acc, item) => {
-    const type = item.data_type as DataType;
+    const type = item.data_type;
     if (!acc[type]) acc[type] = [];
     acc[type].push(item);
     return acc;
   }, {} as Record<string, typeof importHistory>);
-
-  const pendingCount = fileQueue.filter(f => f.status === "pending").length;
-  const processingFile = fileQueue.find(f => f.status === "processing");
 
   return (
     <SuperAdminLayout title="データ移行">
       <div className="space-y-6">
         {/* Tenant Selector */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
               テナント選択
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="max-w-md">
-              <Select value={selectedTenantId} onValueChange={setSelectedTenantId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="テナントを選択..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {tenantsLoading ? (
-                    <SelectItem value="loading" disabled>読み込み中...</SelectItem>
-                  ) : (
-                    tenants?.map((tenant) => (
-                      <SelectItem key={tenant.id} value={tenant.id}>
-                        {tenant.name} ({tenant.slug})
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={selectedTenantId} onValueChange={setSelectedTenantId}>
+              <SelectTrigger className="max-w-md">
+                <SelectValue placeholder="テナントを選択..." />
+              </SelectTrigger>
+              <SelectContent>
+                {tenantsLoading ? (
+                  <SelectItem value="loading" disabled>読み込み中...</SelectItem>
+                ) : (
+                  tenants?.map((tenant) => (
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      {tenant.name} ({tenant.slug})
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            {selectedTenant && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                <strong>{selectedTenant.name}</strong> にデータをインポートします
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -378,20 +344,20 @@ export default function DataMigration() {
               <TabsTrigger value="history">履歴</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="import" className="space-y-6">
-              {/* File Upload Area */}
+            <TabsContent value="import" className="space-y-4">
+              {/* File Upload */}
               <Card>
-                <CardHeader>
+                <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2">
                     <Upload className="h-5 w-5" />
                     ファイルアップロード
                   </CardTitle>
                   <CardDescription>
-                    複数のCSVファイルを選択できます。データ形式は自動検出されます。
+                    複数CSVを選択 → データ形式を確認/変更 → インポート開始
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                  <div className="border-2 border-dashed rounded-lg p-6 text-center">
                     <input
                       type="file"
                       accept=".csv,.txt"
@@ -401,57 +367,45 @@ export default function DataMigration() {
                       id="file-upload"
                       disabled={isProcessing}
                     />
-                    <label 
-                      htmlFor="file-upload" 
-                      className="cursor-pointer flex flex-col items-center gap-2"
-                    >
-                      <Upload className="h-10 w-10 text-muted-foreground" />
-                      <span className="font-medium">クリックしてファイルを選択</span>
-                      <span className="text-sm text-muted-foreground">
-                        複数ファイル選択可能（CSV, TXT）
-                      </span>
+                    <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center gap-2">
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                      <span className="text-sm">クリックしてファイルを選択（複数可）</span>
                     </label>
                   </div>
 
                   {/* Controls */}
                   {fileQueue.length > 0 && (
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline">
-                          {fileQueue.length}件のファイル
-                        </Badge>
-                        <Badge variant="secondary">
-                          {pendingCount}件が待機中
-                        </Badge>
+                        <Badge variant="outline">{fileQueue.length}件</Badge>
+                        <Badge variant="secondary">{pendingCount}件待機</Badge>
+                        {unknownCount > 0 && (
+                          <Badge variant="destructive">{unknownCount}件要選択</Badge>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         {!isProcessing ? (
                           <>
                             <Button variant="outline" size="sm" onClick={clearQueue}>
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              クリア
+                              <Trash2 className="h-4 w-4 mr-1" />クリア
                             </Button>
                             <Button onClick={startProcessing} disabled={pendingCount === 0}>
-                              <Play className="h-4 w-4 mr-1" />
-                              インポート開始
+                              <Play className="h-4 w-4 mr-1" />インポート開始
                             </Button>
                           </>
                         ) : (
                           <>
                             {controlRef.current.paused ? (
                               <Button variant="outline" size="sm" onClick={handleResume}>
-                                <Play className="h-4 w-4 mr-1" />
-                                再開
+                                <Play className="h-4 w-4 mr-1" />再開
                               </Button>
                             ) : (
                               <Button variant="outline" size="sm" onClick={handlePause}>
-                                <Pause className="h-4 w-4 mr-1" />
-                                一時停止
+                                <Pause className="h-4 w-4 mr-1" />一時停止
                               </Button>
                             )}
                             <Button variant="destructive" size="sm" onClick={handleStop}>
-                              <Square className="h-4 w-4 mr-1" />
-                              中止
+                              <Square className="h-4 w-4 mr-1" />中止
                             </Button>
                           </>
                         )}
@@ -459,7 +413,7 @@ export default function DataMigration() {
                     </div>
                   )}
 
-                  {/* Current Processing */}
+                  {/* Processing indicator */}
                   {processingFile && (
                     <Alert>
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -472,35 +426,56 @@ export default function DataMigration() {
                 </CardContent>
               </Card>
 
-              {/* Queue by Data Type */}
-              {Object.entries(groupedQueue).map(([type, items]) => (
-                <Card key={type}>
-                  <CardHeader className="py-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      {type !== "unknown" ? DATA_FORMATS[type as Exclude<DataType, "unknown">]?.label : "不明"}
-                      <Badge variant="outline">{items.length}件</Badge>
-                    </CardTitle>
+              {/* File Queue Table */}
+              {fileQueue.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">ファイル一覧</CardTitle>
                   </CardHeader>
-                  <CardContent className="pt-0">
-                    <ScrollArea className="h-[200px]">
+                  <CardContent>
+                    <ScrollArea className="h-[400px]">
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead>ファイル名</TableHead>
+                            <TableHead className="w-[150px]">データ形式</TableHead>
                             <TableHead className="w-[100px]">状態</TableHead>
-                            <TableHead className="w-[150px]">結果</TableHead>
+                            <TableHead className="w-[180px]">結果</TableHead>
                             <TableHead className="w-[50px]"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {items.map((item) => (
+                          {fileQueue.map((item) => (
                             <TableRow key={item.id}>
                               <TableCell className="font-mono text-xs">
                                 <div className="flex items-center gap-2">
-                                  <File className="h-4 w-4 text-muted-foreground" />
-                                  {item.file.name}
+                                  <File className="h-4 w-4 text-muted-foreground shrink-0" />
+                                  <span className="truncate max-w-[200px]">{item.file.name}</span>
                                 </div>
+                              </TableCell>
+                              <TableCell>
+                                {item.status === "pending" ? (
+                                  <Select
+                                    value={item.selectedType}
+                                    onValueChange={(v) => updateFileType(item.id, v as DataType)}
+                                  >
+                                    <SelectTrigger className="h-8 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="unknown">-- 選択 --</SelectItem>
+                                      {Object.entries(DATA_FORMATS).map(([key, fmt]) => (
+                                        <SelectItem key={key} value={key}>{fmt.label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Badge variant="outline">
+                                    {item.selectedType !== "unknown" 
+                                      ? DATA_FORMATS[item.selectedType]?.label 
+                                      : "不明"}
+                                  </Badge>
+                                )}
                               </TableCell>
                               <TableCell>
                                 {item.status === "pending" && (
@@ -519,9 +494,9 @@ export default function DataMigration() {
                               <TableCell className="text-xs">
                                 {item.result && (
                                   <span>
-                                    成功: {item.result.inserted} / 
-                                    スキップ: {item.result.skipped} / 
-                                    失敗: {item.result.failed}
+                                    ✓{item.result.inserted} / 
+                                    ⊘{item.result.skipped} / 
+                                    ✗{item.result.failed}
                                   </span>
                                 )}
                                 {item.error && (
@@ -530,11 +505,7 @@ export default function DataMigration() {
                               </TableCell>
                               <TableCell>
                                 {item.status === "pending" && (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    onClick={() => removeFile(item.id)}
-                                  >
+                                  <Button variant="ghost" size="icon" onClick={() => removeFile(item.id)}>
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 )}
@@ -546,27 +517,26 @@ export default function DataMigration() {
                     </ScrollArea>
                   </CardContent>
                 </Card>
-              ))}
+              )}
 
               {/* Format Help */}
               {fileQueue.length === 0 && (
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2">
                       <HelpCircle className="h-5 w-5" />
                       対応データ形式
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                      {Object.values(DATA_FORMATS).map((format) => (
-                        <div key={format.type} className="p-3 rounded-lg border text-sm">
-                          <Badge variant="outline" className="mb-1">{format.label}</Badge>
-                          <p className="text-muted-foreground text-xs">{format.description}</p>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {Object.entries(DATA_FORMATS).map(([key, fmt]) => (
+                        <div key={key} className="p-3 rounded-lg border text-sm">
+                          <Badge variant="outline" className="mb-1">{fmt.label}</Badge>
+                          <p className="text-muted-foreground text-xs">{fmt.description}</p>
                         </div>
                       ))}
                     </div>
-                    
                     <Alert className="mt-4">
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription className="text-xs">
@@ -585,13 +555,13 @@ export default function DataMigration() {
                     <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                   </CardContent>
                 </Card>
-              ) : (
+              ) : Object.keys(groupedHistory).length > 0 ? (
                 Object.entries(groupedHistory).map(([type, items]) => (
                   <Card key={type}>
                     <CardHeader className="py-3">
                       <CardTitle className="text-base flex items-center gap-2">
                         <FileText className="h-4 w-4" />
-                        {DATA_FORMATS[type as Exclude<DataType, "unknown">]?.label || type}
+                        {DATA_FORMATS[type as keyof typeof DATA_FORMATS]?.label || type}
                         <Badge variant="outline">{items?.length || 0}件</Badge>
                       </CardTitle>
                     </CardHeader>
@@ -614,9 +584,7 @@ export default function DataMigration() {
                                   {format(new Date(item.imported_at), "MM/dd HH:mm", { locale: ja })}
                                 </TableCell>
                                 <TableCell className="text-xs">
-                                  成功: {item.records_inserted} / 
-                                  スキップ: {item.records_skipped} / 
-                                  失敗: {item.records_failed}
+                                  ✓{item.records_inserted} / ⊘{item.records_skipped} / ✗{item.records_failed}
                                 </TableCell>
                                 <TableCell>
                                   {item.status === "completed" ? (
@@ -633,9 +601,7 @@ export default function DataMigration() {
                     </CardContent>
                   </Card>
                 ))
-              )}
-              
-              {!historyLoading && Object.keys(groupedHistory).length === 0 && (
+              ) : (
                 <Card>
                   <CardContent className="py-12 text-center text-muted-foreground">
                     インポート履歴がありません
