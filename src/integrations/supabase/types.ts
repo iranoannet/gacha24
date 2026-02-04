@@ -419,6 +419,59 @@ export type Database = {
           },
         ]
       }
+      import_history: {
+        Row: {
+          data_type: string
+          error_summary: string | null
+          file_name: string
+          id: string
+          imported_at: string | null
+          imported_by: string | null
+          records_failed: number | null
+          records_inserted: number | null
+          records_processed: number | null
+          records_skipped: number | null
+          status: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          data_type: string
+          error_summary?: string | null
+          file_name: string
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          records_failed?: number | null
+          records_inserted?: number | null
+          records_processed?: number | null
+          records_skipped?: number | null
+          status?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          data_type?: string
+          error_summary?: string | null
+          file_name?: string
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          records_failed?: number | null
+          records_inserted?: number | null
+          records_processed?: number | null
+          records_skipped?: number | null
+          status?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_actions: {
         Row: {
           action_type: Database["public"]["Enums"]["action_type"]
