@@ -148,23 +148,29 @@ serve(async (req) => {
     let skipped = 0;
     let userNotFound = 0;
     const errors: string[] = [];
+    const failedRows: { row: number; legacy_user_id: number; reason: string }[] = [];
 
     const BATCH_SIZE = 500;
     for (let i = 0; i < records.length; i += BATCH_SIZE) {
       const batch = records.slice(i, i + BATCH_SIZE);
       const toInsert = [];
       
-      for (const record of batch) {
+      for (let j = 0; j < batch.length; j++) {
+        const record = batch[j];
+        const rowNumber = i + j + (hasHeaders ? 2 : 1); // 1-indexed, accounting for header
+        
         // Find user by legacy card_id (which is the legacy user id)
         const email = legacyIdToEmail.get(record.card_id);
         if (!email) {
           userNotFound++;
+          failedRows.push({ row: rowNumber, legacy_user_id: record.card_id, reason: "legacy_user_not_in_migrations" });
           continue;
         }
         
         const userId = emailToUserId.get(email.toLowerCase());
         if (!userId) {
           userNotFound++;
+          failedRows.push({ row: rowNumber, legacy_user_id: record.card_id, reason: "user_not_logged_in_yet" });
           continue;
         }
 
@@ -203,6 +209,12 @@ serve(async (req) => {
       }
     }
 
+    // Log sample of failed rows for debugging
+    if (failedRows.length > 0) {
+      console.log(`Failed rows sample (first 20): ${JSON.stringify(failedRows.slice(0, 20))}`);
+      console.log(`Total user_not_found: ${userNotFound}`);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -211,6 +223,7 @@ serve(async (req) => {
         skipped,
         user_not_found: userNotFound,
         errors: errors.length > 0 ? errors : undefined,
+        failed_rows_sample: failedRows.slice(0, 50), // Return first 50 failed rows
       }),
       {
         status: 200,
