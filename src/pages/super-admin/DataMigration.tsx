@@ -20,7 +20,7 @@ import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
-type DataType = "users" | "transactions" | "inventory" | "daily-sales" | "shipping-history" | "unknown";
+type DataType = "users" | "transactions" | "inventory" | "daily-sales" | "shipping-history" | "point-conversions" | "unknown";
 
 const DATA_FORMATS: Record<Exclude<DataType, "unknown">, { label: string; functionName: string; description: string }> = {
   "users": {
@@ -48,6 +48,11 @@ const DATA_FORMATS: Record<Exclude<DataType, "unknown">, { label: string; functi
     functionName: "import-shipping-history",
     description: "発送記録",
   },
+  "point-conversions": {
+    label: "ポイント還元",
+    functionName: "import-point-conversions",
+    description: "ポイント還元履歴（userpoint_trigger_histories）",
+  },
 };
 
 function detectDataType(headers: string[], fileName?: string): DataType {
@@ -56,6 +61,9 @@ function detectDataType(headers: string[], fileName?: string): DataType {
   const fileNameLower = fileName?.toLowerCase() || "";
   
   // First: Check filename for common patterns
+  if (fileNameLower.includes("userpoint_trigger") || fileNameLower.includes("point_trigger")) {
+    return "point-conversions";
+  }
   if (fileNameLower.includes("user_histor") || fileNameLower.includes("histories")) {
     return "transactions";
   }
@@ -73,6 +81,11 @@ function detectDataType(headers: string[], fileName?: string): DataType {
   }
   
   // Second: Check headers
+  // userpoint_trigger_histories: id, user_id, old_point, new_point, created, modified
+  if (headerStr.includes("old_point") && headerStr.includes("new_point")) {
+    return "point-conversions";
+  }
+  
   // day_datas: id,date,payment,profit,points_used,status
   if (headerStr.includes("payment") || headerStr.includes("profit") || headerStr.includes("rieki")) {
     return "daily-sales";
