@@ -217,18 +217,21 @@ export default function DataMigration() {
 
   const selectedTenant = tenants?.find(t => t.id === selectedTenantId);
 
-  // Delete import history mutation
+  // Delete import history mutation (with associated data)
   const deleteHistoryMutation = useMutation({
     mutationFn: async (historyId: string) => {
-      const { error } = await supabase
-        .from("import_history")
-        .delete()
-        .eq("id", historyId);
+      const { data, error } = await supabase.functions.invoke("delete-import-history", {
+        body: { history_id: historyId },
+      });
       if (error) throw error;
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["import-history", selectedTenantId] });
-      toast.success("履歴を削除しました");
+      queryClient.invalidateQueries({ queryKey: ["migration-stats", selectedTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["profile-stats", selectedTenantId] });
+      const details = data?.details?.join(", ") || "";
+      toast.success(`削除完了: ${details}`);
     },
     onError: (error: Error) => {
       toast.error(`削除エラー: ${error.message}`);
