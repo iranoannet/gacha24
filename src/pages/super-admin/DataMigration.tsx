@@ -16,6 +16,7 @@ import {
   HelpCircle, Trash2, File, Clock, XCircle, Loader2, Users, UserPlus
 } from "lucide-react";
 import { toast } from "sonner";
+import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
@@ -215,6 +216,24 @@ export default function DataMigration() {
   });
 
   const selectedTenant = tenants?.find(t => t.id === selectedTenantId);
+
+  // Delete import history mutation
+  const deleteHistoryMutation = useMutation({
+    mutationFn: async (historyId: string) => {
+      const { error } = await supabase
+        .from("import_history")
+        .delete()
+        .eq("id", historyId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["import-history", selectedTenantId] });
+      toast.success("履歴を削除しました");
+    },
+    onError: (error: Error) => {
+      toast.error(`削除エラー: ${error.message}`);
+    },
+  });
 
   // Bulk profile creation function
   const startBulkProfileCreation = async () => {
@@ -898,6 +917,7 @@ export default function DataMigration() {
                               <TableHead>日時</TableHead>
                               <TableHead>結果</TableHead>
                               <TableHead>状態</TableHead>
+                              <TableHead className="w-[50px]"></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -916,6 +936,17 @@ export default function DataMigration() {
                                   ) : (
                                     <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />失敗</Badge>
                                   )}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => deleteHistoryMutation.mutate(item.id)}
+                                    disabled={deleteHistoryMutation.isPending}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                                  </Button>
                                 </TableCell>
                               </TableRow>
                             ))}
