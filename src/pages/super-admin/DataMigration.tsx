@@ -49,18 +49,31 @@ const DATA_FORMATS: Record<Exclude<DataType, "unknown">, { label: string; functi
   },
 };
 
-function detectDataType(headers: string[]): DataType {
+function detectDataType(headers: string[], fileName?: string): DataType {
   const headerLower = headers.map(h => h.toLowerCase().replace(/"/g, "").trim());
   const headerStr = headerLower.join(",");
+  const fileNameLower = fileName?.toLowerCase() || "";
   
-  // pack_cards: id,pack_id,card_id,user_id...
-  if (headerStr.includes("pack_id") || 
-      (headerStr.includes("card_id") && headerStr.includes("user_id"))) {
+  // First: Check filename for common patterns
+  if (fileNameLower.includes("user_histor") || fileNameLower.includes("histories")) {
+    return "transactions";
+  }
+  if (fileNameLower.includes("pack_card") && !fileNameLower.includes("cache")) {
     return "inventory";
   }
+  if (fileNameLower.includes("day_data") || fileNameLower.includes("daily")) {
+    return "daily-sales";
+  }
+  if (fileNameLower.includes("oversea") || fileNameLower.includes("shipping") || fileNameLower.includes("wait")) {
+    return "shipping-history";
+  }
+  if (fileNameLower.includes("user") && !fileNameLower.includes("histor")) {
+    return "users";
+  }
   
+  // Second: Check headers
   // day_datas: id,date,payment,profit,points_used,status
-  if (headerStr.includes("payment") || headerStr.includes("profit")) {
+  if (headerStr.includes("payment") || headerStr.includes("profit") || headerStr.includes("rieki")) {
     return "daily-sales";
   }
   
@@ -70,20 +83,27 @@ function detectDataType(headers: string[]): DataType {
     return "users";
   }
   
-  // transactions
+  // transactions: user_histories format - typically has user_id, pack_id, created, etc.
   if (headerStr.includes("user_email") && headerStr.includes("spent")) {
     return "transactions";
   }
   
-  // shipping
-  if (headerStr.includes("tracking") || headerStr.includes("shipped") || headerStr.includes("shire")) {
+  // shipping: oversea_waits format - has shire_state, card_id (legacy user_id)
+  if (headerStr.includes("shire") || headerStr.includes("tracking") || headerStr.includes("shipped")) {
     return "shipping-history";
+  }
+  
+  // pack_cards/inventory: has pack_id, card_id, user_id, redemption_point
+  if (headerStr.includes("pack_id") || headerStr.includes("redemption_point") ||
+      (headerStr.includes("card_id") && headerStr.includes("user_id") && headerStr.includes("sale_price"))) {
+    return "inventory";
   }
   
   // Fallback: check column count for positional CSVs
   const colCount = headers.length;
   if (colCount === 6 && headers[0]?.match(/^\d+$/)) return "daily-sales";
   if (colCount >= 15 && headers[0]?.match(/^\d+$/)) return "inventory";
+  if (colCount === 9 && headers[0]?.match(/^\d+$/)) return "shipping-history";
   
   return "unknown";
 }
@@ -149,7 +169,7 @@ export default function DataMigration() {
       const content = await file.text();
       const firstLine = content.trim().split("\n")[0] || "";
       const headers = firstLine.split(",").map(h => h.replace(/"/g, "").trim());
-      const detectedType = detectDataType(headers);
+      const detectedType = detectDataType(headers, file.name);
       
       newItems.push({
         id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
