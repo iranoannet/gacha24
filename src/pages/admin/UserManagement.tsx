@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Users, MessageSquare, Plus, Minus, Send, Clock, UserCheck } from "lucide-react";
-import { useState } from "react";
+import { Search, Users, MessageSquare, Plus, Minus, Send, Clock, UserCheck, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -32,12 +32,17 @@ interface ProfileWithEmail {
   id: string;
   user_id: string;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   points_balance: number;
   created_at: string;
   last_login_at: string | null;
   email: string | null;
   tenant_id: string | null;
 }
+
+type SortColumn = "points" | "totalPaid" | "monthlyPaid" | "lastLogin";
+type SortDirection = "asc" | "desc";
 
 interface MigrationUser {
   id: string;
@@ -51,12 +56,17 @@ interface MigrationUser {
   first_name: string | null;
 }
 
+const ITEMS_PER_PAGE = 50;
+
 export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<ProfileWithEmail | null>(null);
   const [pointAdjustment, setPointAdjustment] = useState(0);
   const [newNote, setNewNote] = useState("");
   const [activeTab, setActiveTab] = useState("active");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const queryClient = useQueryClient();
   const { user: adminUser } = useAuth();
   const { tenant } = useTenant();
@@ -240,15 +250,92 @@ export default function UserManagement() {
     return userRoles?.find((r) => r.user_id === userId)?.role || "user";
   };
 
+  const getDisplayName = (profile: ProfileWithEmail) => {
+    // First try to use first_name + last_name
+    const fullName = `${profile.last_name || ""} ${profile.first_name || ""}`.trim();
+    if (fullName) return fullName;
+    // Fall back to display_name
+    if (profile.display_name) return profile.display_name;
+    return "未設定";
+  };
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("desc");
+    }
+    setCurrentPage(1);
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="w-4 h-4 ml-1 opacity-50" />;
+    }
+    return sortDirection === "asc" 
+      ? <ArrowUp className="w-4 h-4 ml-1" />
+      : <ArrowDown className="w-4 h-4 ml-1" />;
+  };
+
   const filteredProfiles = profiles?.filter((p) => {
     if (!searchQuery) return true;
     const search = searchQuery.toLowerCase();
     return (
       p.display_name?.toLowerCase().includes(search) ||
+      p.first_name?.toLowerCase().includes(search) ||
+      p.last_name?.toLowerCase().includes(search) ||
       p.user_id.toLowerCase().includes(search) ||
       p.email?.toLowerCase().includes(search)
     );
   });
+
+  // Sorted and paginated profiles
+  const sortedAndPaginatedProfiles = useMemo(() => {
+    if (!filteredProfiles) return [];
+    
+    let sorted = [...filteredProfiles];
+    
+    if (sortColumn) {
+      sorted.sort((a, b) => {
+        const statsA = getUserStats(a.user_id);
+        const statsB = getUserStats(b.user_id);
+        
+        let valA: number | string | null;
+        let valB: number | string | null;
+        
+        switch (sortColumn) {
+          case "points":
+            valA = a.points_balance;
+            valB = b.points_balance;
+            break;
+          case "totalPaid":
+            valA = statsA.totalPaid;
+            valB = statsB.totalPaid;
+            break;
+          case "monthlyPaid":
+            valA = statsA.monthlyPaid;
+            valB = statsB.monthlyPaid;
+            break;
+          case "lastLogin":
+            valA = a.last_login_at ? new Date(a.last_login_at).getTime() : 0;
+            valB = b.last_login_at ? new Date(b.last_login_at).getTime() : 0;
+            break;
+          default:
+            return 0;
+        }
+        
+        if (valA < valB) return sortDirection === "asc" ? -1 : 1;
+        if (valA > valB) return sortDirection === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sorted.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredProfiles, sortColumn, sortDirection, currentPage, payments, transactions]);
+
+  const totalPages = Math.ceil((filteredProfiles?.length || 0) / ITEMS_PER_PAGE);
 
   const filteredMigrations = pendingMigrations?.filter((m) => {
     if (!searchQuery) return true;
@@ -273,7 +360,10 @@ export default function UserManagement() {
           <Input
             placeholder="名前、メール、ユーザーIDで検索..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
             className="pl-10"
           />
         </div>
@@ -307,59 +397,155 @@ export default function UserManagement() {
                 ) : filteredProfiles?.length === 0 ? (
                   <p className="text-muted-foreground">ユーザーがいません</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>表示名</TableHead>
-                          <TableHead>メール</TableHead>
-                          <TableHead>ロール</TableHead>
-                          <TableHead>ポイント</TableHead>
-                          <TableHead>総課金額</TableHead>
-                          <TableHead>今月課金</TableHead>
-                          <TableHead>最終ログイン</TableHead>
-                          <TableHead>操作</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredProfiles?.map((profile) => {
-                          const stats = getUserStats(profile.user_id);
-                          const role = getUserRole(profile.user_id);
-                          return (
-                            <TableRow key={profile.id}>
-                              <TableCell className="font-medium">
-                                {profile.display_name || "未設定"}
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                {profile.email || "-"}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={role === "admin" ? "default" : "secondary"}>
-                                  {role}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>{profile.points_balance.toLocaleString()}pt</TableCell>
-                              <TableCell>¥{stats.totalPaid.toLocaleString()}</TableCell>
-                              <TableCell>¥{stats.monthlyPaid.toLocaleString()}</TableCell>
-                              <TableCell className="text-xs">
-                                {profile.last_login_at
-                                  ? new Date(profile.last_login_at).toLocaleString("ja-JP")
-                                  : "-"}
-                              </TableCell>
-                              <TableCell>
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>表示名</TableHead>
+                            <TableHead>メール</TableHead>
+                            <TableHead>ロール</TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 p-0 hover:bg-transparent"
+                                onClick={() => handleSort("points")}
+                              >
+                                ポイント
+                                <SortIcon column="points" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 p-0 hover:bg-transparent"
+                                onClick={() => handleSort("totalPaid")}
+                              >
+                                総課金額
+                                <SortIcon column="totalPaid" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 p-0 hover:bg-transparent"
+                                onClick={() => handleSort("monthlyPaid")}
+                              >
+                                今月課金
+                                <SortIcon column="monthlyPaid" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 p-0 hover:bg-transparent"
+                                onClick={() => handleSort("lastLogin")}
+                              >
+                                最終ログイン
+                                <SortIcon column="lastLogin" />
+                              </Button>
+                            </TableHead>
+                            <TableHead>操作</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {sortedAndPaginatedProfiles.map((profile) => {
+                            const stats = getUserStats(profile.user_id);
+                            const role = getUserRole(profile.user_id);
+                            return (
+                              <TableRow key={profile.id}>
+                                <TableCell className="font-medium">
+                                  {getDisplayName(profile)}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {profile.email || "-"}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={role === "admin" ? "default" : "secondary"}>
+                                    {role}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>{profile.points_balance.toLocaleString()}pt</TableCell>
+                                <TableCell>¥{stats.totalPaid.toLocaleString()}</TableCell>
+                                <TableCell>¥{stats.monthlyPaid.toLocaleString()}</TableCell>
+                                <TableCell className="text-xs">
+                                  {profile.last_login_at
+                                    ? new Date(profile.last_login_at).toLocaleString("ja-JP")
+                                    : "-"}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setSelectedUser(profile)}
+                                  >
+                                    <MessageSquare className="w-4 h-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          {activeCount}件中 {(currentPage - 1) * ITEMS_PER_PAGE + 1}〜{Math.min(currentPage * ITEMS_PER_PAGE, activeCount)}件を表示
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            前へ
+                          </Button>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                              let pageNum: number;
+                              if (totalPages <= 5) {
+                                pageNum = i + 1;
+                              } else if (currentPage <= 3) {
+                                pageNum = i + 1;
+                              } else if (currentPage >= totalPages - 2) {
+                                pageNum = totalPages - 4 + i;
+                              } else {
+                                pageNum = currentPage - 2 + i;
+                              }
+                              return (
                                 <Button
+                                  key={pageNum}
+                                  variant={currentPage === pageNum ? "default" : "outline"}
                                   size="sm"
-                                  variant="outline"
-                                  onClick={() => setSelectedUser(profile)}
+                                  className="w-8"
+                                  onClick={() => setCurrentPage(pageNum)}
                                 >
-                                  <MessageSquare className="w-4 h-4" />
+                                  {pageNum}
                                 </Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                              );
+                            })}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                          >
+                            次へ
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
