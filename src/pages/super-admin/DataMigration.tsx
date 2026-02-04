@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Building2, AlertCircle, Upload, FileText, CheckCircle, Play, Pause, Square, 
-  HelpCircle, Trash2, File, Clock, XCircle, Loader2
+  HelpCircle, Trash2, File, Clock, XCircle, Loader2, Users, UserPlus
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -122,6 +122,18 @@ interface FileQueueItem {
 
 const BATCH_SIZE = 100;
 
+interface BulkProfileResult {
+  total_remaining: number;
+  processed: number;
+  marked_applied: number;
+  auth_users_created: number;
+  profiles_created: number;
+  skipped_existing: number;
+  errors?: string[];
+  error_count: number;
+  has_more: boolean;
+}
+
 export default function DataMigration() {
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [fileQueue, setFileQueue] = useState<FileQueueItem[]>([]);
@@ -129,6 +141,18 @@ export default function DataMigration() {
   const [isDragging, setIsDragging] = useState(false);
   const controlRef = useRef<{ paused: boolean; stopped: boolean }>({ paused: false, stopped: false });
   const queryClient = useQueryClient();
+  
+  // Bulk profile creation state
+  const [isCreatingProfiles, setIsCreatingProfiles] = useState(false);
+  const [profileCreationProgress, setProfileCreationProgress] = useState<{
+    totalProcessed: number;
+    totalCreated: number;
+    totalSkipped: number;
+    totalErrors: number;
+    remaining: number;
+    isComplete: boolean;
+  } | null>(null);
+  const profileCreationControlRef = useRef<{ stopped: boolean }>({ stopped: false });
   const { data: tenants, isLoading: tenantsLoading } = useQuery({
     queryKey: ["all-tenants"],
     queryFn: async () => {
@@ -157,7 +181,120 @@ export default function DataMigration() {
     enabled: !!selectedTenantId,
   });
 
+  // Query for unapplied user_migrations count
+  const { data: migrationStats, refetch: refetchMigrationStats } = useQuery({
+    queryKey: ["migration-stats", selectedTenantId],
+    queryFn: async () => {
+      if (!selectedTenantId) return null;
+      
+      const [unappliedResult, appliedResult, profilesResult] = await Promise.all([
+        supabase
+          .from("user_migrations")
+          .select("*", { count: "exact", head: true })
+          .eq("tenant_id", selectedTenantId)
+          .eq("is_applied", false),
+        supabase
+          .from("user_migrations")
+          .select("*", { count: "exact", head: true })
+          .eq("tenant_id", selectedTenantId)
+          .eq("is_applied", true),
+        supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .eq("tenant_id", selectedTenantId),
+      ]);
+      
+      return {
+        unapplied: unappliedResult.count || 0,
+        applied: appliedResult.count || 0,
+        profiles: profilesResult.count || 0,
+      };
+    },
+    enabled: !!selectedTenantId,
+    refetchInterval: isCreatingProfiles ? 5000 : false,
+  });
+
   const selectedTenant = tenants?.find(t => t.id === selectedTenantId);
+
+  // Bulk profile creation function
+  const startBulkProfileCreation = async () => {
+    if (!selectedTenantId) {
+      toast.error("テナントを選択してください");
+      return;
+    }
+
+    setIsCreatingProfiles(true);
+    profileCreationControlRef.current.stopped = false;
+    setProfileCreationProgress({
+      totalProcessed: 0,
+      totalCreated: 0,
+      totalSkipped: 0,
+      totalErrors: 0,
+      remaining: migrationStats?.unapplied || 0,
+      isComplete: false,
+    });
+
+    let totalProcessed = 0;
+    let totalCreated = 0;
+    let totalSkipped = 0;
+    let totalErrors = 0;
+    let hasMore = true;
+    let batchCount = 0;
+
+    while (hasMore && !profileCreationControlRef.current.stopped) {
+      batchCount++;
+      try {
+        const { data, error } = await supabase.functions.invoke<BulkProfileResult>("bulk-create-profiles", {
+          body: { tenant_id: selectedTenantId, limit: 100 },
+        });
+
+        if (error) {
+          console.error("Batch error:", error);
+          toast.error(`バッチ ${batchCount} エラー: ${error.message}`);
+          break;
+        }
+
+        if (data) {
+          totalProcessed += data.processed;
+          totalCreated += data.profiles_created;
+          totalSkipped += data.skipped_existing;
+          totalErrors += data.error_count;
+          hasMore = data.has_more;
+
+          setProfileCreationProgress({
+            totalProcessed,
+            totalCreated,
+            totalSkipped,
+            totalErrors,
+            remaining: data.total_remaining,
+            isComplete: !data.has_more,
+          });
+
+          // Small delay between batches
+          if (hasMore) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        toast.error("予期せぬエラーが発生しました");
+        break;
+      }
+    }
+
+    setIsCreatingProfiles(false);
+    refetchMigrationStats();
+    
+    if (profileCreationControlRef.current.stopped) {
+      toast.info("プロファイル作成を中止しました");
+    } else if (!hasMore) {
+      toast.success(`完了: ${totalCreated}件のプロファイルを作成しました`);
+    }
+  };
+
+  const stopBulkProfileCreation = () => {
+    profileCreationControlRef.current.stopped = true;
+  };
 
   const processFiles = useCallback(async (files: File[]) => {
     if (files.length === 0) return;
@@ -391,6 +528,124 @@ export default function DataMigration() {
             )}
           </CardContent>
         </Card>
+
+        {/* Bulk Profile Creation Card */}
+        {selectedTenantId && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5" />
+                一括プロファイル作成
+              </CardTitle>
+              <CardDescription>
+                user_migrationsテーブルから認証ユーザーとプロファイルを一括作成します
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-3 rounded-lg border bg-muted/30">
+                  <div className="text-xs text-muted-foreground">未適用移行</div>
+                  <div className="text-2xl font-bold text-orange-500">
+                    {migrationStats?.unapplied?.toLocaleString() || 0}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg border bg-muted/30">
+                  <div className="text-xs text-muted-foreground">適用済み</div>
+                  <div className="text-2xl font-bold text-green-500">
+                    {migrationStats?.applied?.toLocaleString() || 0}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg border bg-muted/30">
+                  <div className="text-xs text-muted-foreground">プロファイル数</div>
+                  <div className="text-2xl font-bold">
+                    {migrationStats?.profiles?.toLocaleString() || 0}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg border bg-muted/30">
+                  <div className="text-xs text-muted-foreground">作成率</div>
+                  <div className="text-2xl font-bold">
+                    {migrationStats && (migrationStats.unapplied + migrationStats.applied) > 0
+                      ? Math.round((migrationStats.applied / (migrationStats.unapplied + migrationStats.applied)) * 100)
+                      : 0}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress */}
+              {profileCreationProgress && (
+                <div className="space-y-3 p-4 rounded-lg border bg-muted/20">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      {isCreatingProfiles && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {profileCreationProgress.isComplete ? "完了" : isCreatingProfiles ? "処理中..." : "中断"}
+                    </span>
+                    <span className="text-muted-foreground">
+                      残り: {profileCreationProgress.remaining.toLocaleString()}件
+                    </span>
+                  </div>
+                  <Progress 
+                    value={migrationStats && (migrationStats.unapplied + migrationStats.applied) > 0
+                      ? ((migrationStats.applied) / (migrationStats.unapplied + migrationStats.applied)) * 100
+                      : 0} 
+                    className="h-2"
+                  />
+                  <div className="grid grid-cols-4 gap-2 text-xs">
+                    <div className="text-center">
+                      <div className="font-medium">{profileCreationProgress.totalProcessed.toLocaleString()}</div>
+                      <div className="text-muted-foreground">処理済み</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium text-green-500">{profileCreationProgress.totalCreated.toLocaleString()}</div>
+                      <div className="text-muted-foreground">作成</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium text-yellow-500">{profileCreationProgress.totalSkipped.toLocaleString()}</div>
+                      <div className="text-muted-foreground">スキップ</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium text-red-500">{profileCreationProgress.totalErrors.toLocaleString()}</div>
+                      <div className="text-muted-foreground">エラー</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                {!isCreatingProfiles ? (
+                  <Button 
+                    onClick={startBulkProfileCreation}
+                    disabled={!migrationStats?.unapplied || migrationStats.unapplied === 0}
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    一括プロファイル作成を開始
+                  </Button>
+                ) : (
+                  <Button variant="destructive" onClick={stopBulkProfileCreation}>
+                    <Square className="h-4 w-4 mr-2" />
+                    中止
+                  </Button>
+                )}
+                <Button 
+                  variant="outline" 
+                  onClick={() => refetchMigrationStats()}
+                  disabled={isCreatingProfiles}
+                >
+                  更新
+                </Button>
+              </div>
+
+              {/* Info */}
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  <strong>推奨順序:</strong> ユーザーCSVインポート → 一括プロファイル作成 → 取引履歴/発送履歴インポート
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+        )}
 
         {selectedTenantId && (
           <Tabs defaultValue="import" className="space-y-4">
