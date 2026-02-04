@@ -224,34 +224,20 @@ async function handlePackCardsImport(
     }
 
     if (toInsert.length > 0) {
-      // Insert one by one to handle duplicates gracefully
-      for (const item of toInsert) {
-        // Check if already exists
-        const { data: existing } = await supabaseAdmin
-          .from("inventory_actions")
-          .select("id")
-          .eq("legacy_pack_card_id", item.legacy_pack_card_id)
-          .eq("tenant_id", tenant_id)
-          .maybeSingle();
-
-        if (existing) {
-          skipped++;
-          continue;
-        }
-
-        const { error: insertError } = await supabaseAdmin
-          .from("inventory_actions")
-          .insert(item);
-        
-        if (insertError) {
-          if (insertError.message.includes("duplicate") || insertError.message.includes("unique")) {
-            skipped++;
-          } else {
-            errors.push(`Record ${item.legacy_pack_card_id}: ${insertError.message}`);
-          }
-        } else {
-          inserted++;
-        }
+      // Use upsert with legacy_pack_card_id constraint for proper deduplication
+      const { data, error } = await supabaseAdmin
+        .from("inventory_actions")
+        .upsert(toInsert, {
+          onConflict: "legacy_pack_card_id,tenant_id",
+          ignoreDuplicates: false
+        })
+        .select("id");
+      
+      if (error) {
+        errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
+        skipped += toInsert.length;
+      } else {
+        inserted += data?.length || 0;
       }
     }
   }
@@ -416,9 +402,13 @@ async function handleEmailBasedImport(
     }
 
     if (toInsert.length > 0) {
+      // Use upsert with legacy_pack_card_id constraint for proper deduplication
       const { data, error } = await supabaseAdmin
         .from("inventory_actions")
-        .insert(toInsert)
+        .upsert(toInsert, {
+          onConflict: "legacy_pack_card_id,tenant_id",
+          ignoreDuplicates: false
+        })
         .select("id");
       
       if (error) {

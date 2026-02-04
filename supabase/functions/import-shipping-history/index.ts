@@ -185,27 +185,18 @@ serve(async (req) => {
       }
 
       if (toInsert.length > 0) {
+        // Use upsert with legacy_id constraint for proper deduplication
         const { data, error } = await supabaseAdmin
           .from("inventory_actions")
           .upsert(toInsert, { 
-            onConflict: "legacy_id",
+            onConflict: "legacy_id,tenant_id",
             ignoreDuplicates: false 
           })
           .select("id");
         
         if (error) {
-          // If upsert fails due to no unique constraint, try insert
-          const { data: insertData, error: insertError } = await supabaseAdmin
-            .from("inventory_actions")
-            .insert(toInsert)
-            .select("id");
-          
-          if (insertError) {
-            errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${insertError.message}`);
-            skipped += toInsert.length;
-          } else {
-            inserted += insertData?.length || 0;
-          }
+          errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
+          skipped += toInsert.length;
         } else {
           inserted += data?.length || 0;
         }

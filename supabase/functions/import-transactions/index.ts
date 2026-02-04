@@ -185,16 +185,36 @@ serve(async (req) => {
       }
 
       if (toInsert.length > 0) {
-        const { data, error } = await supabaseAdmin
-          .from("user_transactions")
-          .insert(toInsert)
-          .select("id");
-        
-        if (error) {
-          errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
-          skipped += toInsert.length;
-        } else {
-          inserted += data?.length || 0;
+        // Check for existing similar transactions in batch
+        const existingChecks = await Promise.all(
+          toInsert.map(async (item) => {
+            const { data } = await supabaseAdmin
+              .from("user_transactions")
+              .select("id")
+              .eq("user_id", item.user_id)
+              .eq("tenant_id", tenant_id)
+              .eq("total_spent_points", item.total_spent_points)
+              .eq("created_at", item.created_at)
+              .limit(1);
+            return data && data.length > 0;
+          })
+        );
+
+        const newItems = toInsert.filter((_, idx) => !existingChecks[idx]);
+        const skippedCount = toInsert.length - newItems.length;
+        skipped += skippedCount;
+
+        if (newItems.length > 0) {
+          const { data, error } = await supabaseAdmin
+            .from("user_transactions")
+            .insert(newItems)
+            .select("id");
+          
+          if (error) {
+            errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
+          } else {
+            inserted += data?.length || 0;
+          }
         }
       }
     }
