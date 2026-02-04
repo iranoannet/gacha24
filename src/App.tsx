@@ -49,6 +49,7 @@ import TenantManagement from "./pages/super-admin/TenantManagement";
 import AllUsersManagement from "./pages/super-admin/AllUsersManagement";
 import GlobalAnalytics from "./pages/super-admin/GlobalAnalytics";
 import SupportTickets from "./pages/super-admin/SupportTickets";
+import DataMigration from "./pages/super-admin/DataMigration";
 import { SuperAdminProtectedRoute } from "@/components/super-admin/SuperAdminProtectedRoute";
 
 // Admin Support
@@ -104,6 +105,7 @@ const App = () => (
               <Route path="/super-admin" element={<SuperAdminProtectedRoute><SuperAdminDashboard /></SuperAdminProtectedRoute>} />
               <Route path="/super-admin/tenants" element={<SuperAdminProtectedRoute><TenantManagement /></SuperAdminProtectedRoute>} />
               <Route path="/super-admin/users" element={<SuperAdminProtectedRoute><AllUsersManagement /></SuperAdminProtectedRoute>} />
+              <Route path="/super-admin/migration" element={<SuperAdminProtectedRoute><DataMigration /></SuperAdminProtectedRoute>} />
               <Route path="/super-admin/analytics" element={<SuperAdminProtectedRoute><GlobalAnalytics /></SuperAdminProtectedRoute>} />
               <Route path="/super-admin/tickets" element={<SuperAdminProtectedRoute><SupportTickets /></SuperAdminProtectedRoute>} />
               
