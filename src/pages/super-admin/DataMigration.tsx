@@ -126,9 +126,9 @@ export default function DataMigration() {
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [fileQueue, setFileQueue] = useState<FileQueueItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const controlRef = useRef<{ paused: boolean; stopped: boolean }>({ paused: false, stopped: false });
   const queryClient = useQueryClient();
-
   const { data: tenants, isLoading: tenantsLoading } = useQuery({
     queryKey: ["all-tenants"],
     queryFn: async () => {
@@ -159,8 +159,7 @@ export default function DataMigration() {
 
   const selectedTenant = tenants?.find(t => t.id === selectedTenantId);
 
-  const handleFilesSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  const processFiles = useCallback(async (files: File[]) => {
     if (files.length === 0) return;
 
     const newItems: FileQueueItem[] = [];
@@ -176,7 +175,7 @@ export default function DataMigration() {
         file,
         content,
         detectedType,
-        selectedType: detectedType, // User can change this
+        selectedType: detectedType,
         status: "pending",
         progress: 0,
       });
@@ -184,8 +183,44 @@ export default function DataMigration() {
     
     setFileQueue(prev => [...prev, ...newItems]);
     toast.success(`${files.length}件のファイルを追加しました`);
-    e.target.value = "";
   }, []);
+
+  const handleFilesSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    await processFiles(files);
+    e.target.value = "";
+  }, [processFiles]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isProcessing) setIsDragging(true);
+  }, [isProcessing]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    if (isProcessing) return;
+    
+    const files = Array.from(e.dataTransfer.files).filter(
+      f => f.name.endsWith('.csv') || f.name.endsWith('.txt')
+    );
+    
+    if (files.length === 0) {
+      toast.error("CSVまたはTXTファイルのみ対応しています");
+      return;
+    }
+    
+    await processFiles(files);
+  }, [isProcessing, processFiles]);
 
   const updateFileType = useCallback((id: string, type: DataType) => {
     setFileQueue(prev => prev.map(f => f.id === id ? { ...f, selectedType: type } : f));
@@ -377,7 +412,16 @@ export default function DataMigration() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                  <div 
+                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                      isDragging 
+                        ? "border-primary bg-primary/5" 
+                        : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                    } ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
                     <input
                       type="file"
                       accept=".csv,.txt"
@@ -387,9 +431,14 @@ export default function DataMigration() {
                       id="file-upload"
                       disabled={isProcessing}
                     />
-                    <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center gap-2">
-                      <Upload className="h-8 w-8 text-muted-foreground" />
-                      <span className="text-sm">クリックしてファイルを選択（複数可）</span>
+                    <label htmlFor="file-upload" className={`flex flex-col items-center gap-2 ${isProcessing ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                      <Upload className={`h-8 w-8 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="text-sm">
+                        {isDragging 
+                          ? "ここにドロップしてください" 
+                          : "ドラッグ&ドロップ または クリックしてファイルを選択"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">CSV/TXTファイル（複数可）</span>
                     </label>
                   </div>
 
