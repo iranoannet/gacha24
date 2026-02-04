@@ -21,23 +21,38 @@ interface MigrationRecord {
   legacy_user_id?: number;
 }
 
-// Column indices for get24 CSV format (0-indexed)
-// Format: ID(0), 姓(1), 名(2), ミドルネーム(3), 国コード(4), ?(5), 国名(6), NULL(7), 都道府県コード(8), 市区町村(9), 住所1(10), 住所2(11), 郵便番号(12), ポイント(13), 電話(14), メール(15), ...
+// Column indices for gachamo CSV format (0-indexed)
+// Actual format: id(0), lastName(1), firstName(2), middleName(3), zipcode(4), country(5), province(6), pref_id(7), shiku(8), address(9), building(10), availablePoint(11), sub_coin(12), tel(13), mail(14), pass(15)...
 const GET24_COLUMN_MAP = {
-  legacy_user_id: 0,
-  last_name: 1,
-  first_name: 2,
-  // middle_name: 3, // Not stored in user_migrations
-  // country_code: 4, // Not needed (e.g., 75)
-  // country_name: 6, // Skip (日本)
-  // prefecture_code: 8, // Not needed (99 = その他)
-  city: 9,
-  address_line1: 10,
-  address_line2: 11,
-  postal_code: 12,  // 郵便番号 (corrected from 5)
-  points_balance: 13,
-  phone_number: 14,
-  email: 15,
+  legacy_user_id: 0,  // id
+  last_name: 1,       // lastName
+  first_name: 2,      // firstName
+  // middle_name: 3,  // middleName (not stored)
+  postal_code: 4,     // zipcode
+  // country: 5,      // country (not needed)
+  // province: 6,     // province (not needed)
+  pref_id: 7,         // pref_id (prefecture code)
+  city: 8,            // shiku
+  address_line1: 9,   // address
+  address_line2: 10,  // building
+  points_balance: 11, // availablePoint
+  // sub_coin: 12,    // sub_coin (not stored)
+  phone_number: 13,   // tel
+  email: 14,          // mail
+};
+
+// Prefecture ID to name mapping
+const PREFECTURE_MAP: Record<number, string> = {
+  1: "北海道", 2: "青森県", 3: "岩手県", 4: "宮城県", 5: "秋田県",
+  6: "山形県", 7: "福島県", 8: "茨城県", 9: "栃木県", 10: "群馬県",
+  11: "埼玉県", 12: "千葉県", 13: "東京都", 14: "神奈川県", 15: "新潟県",
+  16: "富山県", 17: "石川県", 18: "福井県", 19: "山梨県", 20: "長野県",
+  21: "岐阜県", 22: "静岡県", 23: "愛知県", 24: "三重県", 25: "滋賀県",
+  26: "京都府", 27: "大阪府", 28: "兵庫県", 29: "奈良県", 30: "和歌山県",
+  31: "鳥取県", 32: "島根県", 33: "岡山県", 34: "広島県", 35: "山口県",
+  36: "徳島県", 37: "香川県", 38: "愛媛県", 39: "高知県", 40: "福岡県",
+  41: "佐賀県", 42: "長崎県", 43: "熊本県", 44: "大分県", 45: "宮崎県",
+  46: "鹿児島県", 47: "沖縄県"
 };
 
 serve(async (req) => {
@@ -194,14 +209,23 @@ serve(async (req) => {
           const pointsRaw = cleanValue(values[GET24_COLUMN_MAP.points_balance]);
           const points = Math.floor(parseFloat(pointsRaw?.replace(/,/g, "") || "0") || 0);
           
+          // Get prefecture name from ID
+          const prefIdRaw = cleanValue(values[GET24_COLUMN_MAP.pref_id]);
+          const prefId = prefIdRaw ? parseInt(prefIdRaw, 10) : undefined;
+          const prefecture = prefId ? PREFECTURE_MAP[prefId] : undefined;
+          
+          const lastName = cleanValue(values[GET24_COLUMN_MAP.last_name]);
+          const firstName = cleanValue(values[GET24_COLUMN_MAP.first_name]);
+          
           const record: MigrationRecord = {
             email: email!,
-            last_name: cleanValue(values[GET24_COLUMN_MAP.last_name]),
-            first_name: cleanValue(values[GET24_COLUMN_MAP.first_name]),
-            display_name: `${cleanValue(values[GET24_COLUMN_MAP.last_name]) || ""} ${cleanValue(values[GET24_COLUMN_MAP.first_name]) || ""}`.trim() || undefined,
+            last_name: lastName,
+            first_name: firstName,
+            display_name: `${lastName || ""} ${firstName || ""}`.trim() || undefined,
             points_balance: points,
             phone_number: cleanValue(values[GET24_COLUMN_MAP.phone_number]),
             postal_code: cleanValue(values[GET24_COLUMN_MAP.postal_code]),
+            prefecture: prefecture,
             city: cleanValue(values[GET24_COLUMN_MAP.city]),
             address_line1: cleanValue(values[GET24_COLUMN_MAP.address_line1]),
             address_line2: cleanValue(values[GET24_COLUMN_MAP.address_line2]),
