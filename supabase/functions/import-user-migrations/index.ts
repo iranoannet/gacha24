@@ -176,11 +176,22 @@ serve(async (req) => {
               }
               if (mappedHeader === "points_balance" || mappedHeader === "legacy_user_id") {
                 record[mappedHeader] = Math.floor(parseFloat(value.replace(/,/g, "")) || 0);
+              } else if (mappedHeader === "prefecture" && header.toLowerCase() === "pref_id") {
+                // Convert pref_id to prefecture name
+                const prefId = parseInt(value, 10);
+                if (prefId && PREFECTURE_MAP[prefId]) {
+                  record[mappedHeader] = PREFECTURE_MAP[prefId];
+                }
               } else {
                 record[mappedHeader] = value;
               }
             }
           });
+          
+          // Build display_name from last_name + first_name if not set
+          if (!record.display_name && (record.last_name || record.first_name)) {
+            record.display_name = `${record.last_name || ""} ${record.first_name || ""}`.trim();
+          }
           
           // Accept all records, track invalid emails
           if (!record.email || !record.email.includes("@")) {
@@ -352,39 +363,54 @@ function parseCSVLine(line: string): string[] {
 // Map common CSV column names to our schema
 function mapColumnName(header: string): string {
   const mappings: Record<string, string> = {
+    // Email variations
     "email": "email",
     "メールアドレス": "email",
     "mail": "email",
+    // Name variations
     "name": "display_name",
     "display_name": "display_name",
     "表示名": "display_name",
     "last_name": "last_name",
+    "lastname": "last_name",
     "姓": "last_name",
     "first_name": "first_name",
+    "firstname": "first_name",
     "名": "first_name",
+    // Points variations
     "points": "points_balance",
     "points_balance": "points_balance",
+    "availablepoint": "points_balance",
     "ポイント": "points_balance",
     "ポイント残高": "points_balance",
+    // Phone variations
     "phone": "phone_number",
     "phone_number": "phone_number",
+    "tel": "phone_number",
     "電話番号": "phone_number",
+    // Address variations
     "postal_code": "postal_code",
+    "zipcode": "postal_code",
     "郵便番号": "postal_code",
     "zip": "postal_code",
     "prefecture": "prefecture",
+    "pref_id": "prefecture",  // Will need special handling
     "都道府県": "prefecture",
     "city": "city",
+    "shiku": "city",
     "市区町村": "city",
     "address": "address_line1",
     "address_line1": "address_line1",
     "住所1": "address_line1",
     "address_line2": "address_line2",
+    "building": "address_line2",
     "住所2": "address_line2",
+    // Legacy ID variations
+    "id": "legacy_user_id",
     "user_id": "legacy_user_id",
     "legacy_user_id": "legacy_user_id",
     "旧id": "legacy_user_id",
   };
   
-  return mappings[header] || header;
+  return mappings[header] || "";
 }
