@@ -7,7 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Users, Search, Shield } from "lucide-react";
+import { Users, Search, Shield, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -18,6 +20,8 @@ export default function AllUsersManagement() {
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [assignTenantId, setAssignTenantId] = useState<string>("");
 
   const { data: tenants } = useQuery({
@@ -102,6 +106,44 @@ export default function AllUsersManagement() {
     },
   });
 
+  const deleteUsersMutation = useMutation({
+    mutationFn: async (userIds: string[]) => {
+      // Delete from profiles
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .delete()
+        .in("user_id", userIds);
+      if (profileError) throw profileError;
+
+      // Delete from user_roles
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .delete()
+        .in("user_id", userIds);
+      if (roleError) throw roleError;
+
+      // Delete from user_migrations by email
+      const profilesToDelete = profiles?.filter(p => userIds.includes(p.user_id)) || [];
+      const emails = profilesToDelete.map(p => p.email).filter(Boolean);
+      if (emails.length > 0) {
+        await supabase
+          .from("user_migrations")
+          .delete()
+          .in("email", emails);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["super-admin-all-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["super-admin-user-roles"] });
+      toast.success(`${selectedUserIds.length}件のユーザーを削除しました`);
+      setSelectedUserIds([]);
+      setIsDeleteDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast.error(`削除エラー: ${error.message}`);
+    },
+  });
+
   const getUserRole = (userId: string) => {
     const roles = userRoles?.filter((r) => r.user_id === userId) || [];
     if (roles.some((r) => r.role === "super_admin")) return "super_admin";
@@ -122,6 +164,24 @@ export default function AllUsersManagement() {
       p.display_name?.toLowerCase().includes(searchLower)
     );
   });
+
+  const toggleSelectUser = (userId: string) => {
+    setSelectedUserIds(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (!filteredProfiles) return;
+    const allIds = filteredProfiles.map(p => p.user_id);
+    if (selectedUserIds.length === allIds.length) {
+      setSelectedUserIds([]);
+    } else {
+      setSelectedUserIds(allIds);
+    }
+  };
 
   const handleAssignTenant = (profile: any) => {
     setSelectedUser(profile);
@@ -159,11 +219,39 @@ export default function AllUsersManagement() {
         </div>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
               ユーザー一覧
             </CardTitle>
+            {selectedUserIds.length > 0 && (
+              <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm">
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    {selectedUserIds.length}件を削除
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>ユーザーを削除しますか？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      選択された{selectedUserIds.length}件のユーザーを削除します。この操作は取り消せません。
+                      プロフィール、ロール、移行データも削除されます。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteUsersMutation.mutate(selectedUserIds)}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      削除する
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -172,6 +260,12 @@ export default function AllUsersManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={filteredProfiles.length > 0 && selectedUserIds.length === filteredProfiles.length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead>メール / 表示名</TableHead>
                     <TableHead>テナント</TableHead>
                     <TableHead>権限</TableHead>
@@ -185,6 +279,12 @@ export default function AllUsersManagement() {
                     const role = getUserRole(profile.user_id);
                     return (
                       <TableRow key={profile.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedUserIds.includes(profile.user_id)}
+                            onCheckedChange={() => toggleSelectUser(profile.user_id)}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div>
                             <p className="font-medium">{profile.email || "未設定"}</p>
