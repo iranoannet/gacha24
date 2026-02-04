@@ -103,13 +103,15 @@ serve(async (req) => {
 
     // Parse CSV
     const lines = csv_data.trim().split("\n").filter((line: string) => line.trim());
-    const records: ShippingRecord[] = [];
     
     // Check for headers
     const firstLine = lines[0]?.toLowerCase() || "";
     const hasHeaders = firstLine.includes("id,") || firstLine.includes("card_id");
     const startIndex = hasHeaders ? 1 : 0;
     
+    console.log(`Parsing ${lines.length - startIndex} lines from CSV`);
+
+    const recordMap = new Map<number, ShippingRecord>(); // Deduplicate by legacy id
     for (let i = startIndex; i < lines.length; i++) {
       const values = parseCSVLine(lines[i]);
       
@@ -125,7 +127,8 @@ serve(async (req) => {
       const modified = cleanValue(values[8]) || "";
       
       if (id > 0 && card_id > 0) {
-        records.push({
+        // Keep the latest record for each legacy id (last one wins)
+        recordMap.set(id, {
           id,
           card_id,
           pack_card_id,
@@ -138,14 +141,17 @@ serve(async (req) => {
         });
       }
     }
+    
+    const records = Array.from(recordMap.values());
+    const duplicatesInFile = (lines.length - startIndex) - records.length;
 
-    console.log(`Processing ${records.length} shipping history records`);
+    console.log(`Processing ${records.length} shipping history records (${duplicatesInFile} duplicates in file removed)`);
     console.log(`Legacy user mappings available: ${legacyIdToEmail.size}`);
     console.log(`Profile mappings available: ${emailToUserId.size}`);
 
     // Insert inventory actions
     let inserted = 0;
-    let skipped = 0;
+    let skipped = duplicatesInFile; // Start with file duplicates
     let userNotFound = 0;
     const errors: string[] = [];
     const failedRows: { row: number; legacy_user_id: number; reason: string }[] = [];

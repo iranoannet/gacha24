@@ -148,12 +148,12 @@ async function handleLegacyImport(supabaseAdmin: any, tenant_id: string, csv_dat
 
   // Parse CSV
   const lines = csv_data.trim().split("\n").filter((line: string) => line.trim());
-  const records: LegacyTransactionRecord[] = [];
   
   const firstLine = lines[0]?.toLowerCase() || "";
   const hasHeaders = firstLine.includes("pack_id") || firstLine.includes("user_id");
   const startIndex = hasHeaders ? 1 : 0;
   
+  const recordMap = new Map<number, LegacyTransactionRecord>(); // Deduplicate by legacy id
   for (let i = startIndex; i < lines.length; i++) {
     const values = parseCSVLine(lines[i]);
     
@@ -166,14 +166,18 @@ async function handleLegacyImport(supabaseAdmin: any, tenant_id: string, csv_dat
     const modified = cleanValue(values[5]) || "";
     
     if (id > 0 && user_id > 0) {
-      records.push({ id, pack_id, user_id, point, created, modified });
+      // Keep the latest record for each legacy id (last one wins)
+      recordMap.set(id, { id, pack_id, user_id, point, created, modified });
     }
   }
+  
+  const records = Array.from(recordMap.values());
+  const duplicatesInFile = (lines.length - startIndex) - records.length;
 
-  console.log(`Processing ${records.length} legacy transaction records`);
+  console.log(`Processing ${records.length} legacy transaction records (${duplicatesInFile} duplicates in file removed)`);
 
   let inserted = 0;
-  let skipped = 0;
+  let skipped = duplicatesInFile; // Start with file duplicates
   let userNotFound = 0;
   const errors: string[] = [];
   const failedRows: { row: number; legacy_user_id: number; reason: string }[] = [];
