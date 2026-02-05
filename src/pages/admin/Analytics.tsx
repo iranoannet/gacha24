@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from "recharts";
@@ -16,6 +18,7 @@ const RARITY_COLORS = {
 export default function Analytics() {
   const { tenant } = useTenant();
   const tenantId = tenant?.id;
+  const [viewMode, setViewMode] = useState<"daily" | "monthly">("daily");
 
   // Daily analytics from legacy data
   const { data: dailyAnalytics } = useQuery({
@@ -85,6 +88,10 @@ export default function Analytics() {
   const totalPayment = dailyAnalytics?.reduce((acc, d) => acc + (d.payment_amount || 0), 0) || 0;
   const totalProfit = dailyAnalytics?.reduce((acc, d) => acc + (d.profit || 0), 0) || 0;
   const totalPointsUsed = dailyAnalytics?.reduce((acc, d) => acc + (d.points_used || 0), 0) || 0;
+  const totalCost = dailyAnalytics?.reduce((acc, d) => acc + (d.cost || 0), 0) || 0;
+  const avgProfitMargin = dailyAnalytics && dailyAnalytics.length > 0
+    ? (dailyAnalytics.reduce((acc, d) => acc + (d.gross_profit_margin || 0), 0) / dailyAnalytics.length).toFixed(1)
+    : "0";
 
   // Calculate stats from transactions (current system)
   const totalRevenue = transactions?.reduce((acc, t) => acc + t.total_spent_points, 0) || 0;
@@ -113,23 +120,71 @@ export default function Analytics() {
     color: RARITY_COLORS[rarity as keyof typeof RARITY_COLORS] || "#6B7280",
   }));
 
-  // Daily revenue from daily_analytics (last 30 days, sorted ascending for chart)
-  const dailyRevenueData = dailyAnalytics
-    ?.slice(0, 30)
-    .reverse()
-    .map((d) => ({
-      date: d.date.slice(5), // MM-DD format
-      売上: d.payment_amount || 0,
-      粗利: d.profit || 0,
-      ポイント利用: d.points_used || 0,
-    })) || [];
+  // Process data based on view mode
+  const processedChartData = (() => {
+    if (!dailyAnalytics || dailyAnalytics.length === 0) return [];
+
+    if (viewMode === "daily") {
+      // Daily view - last 30 days
+      return dailyAnalytics
+        .slice(0, 30)
+        .reverse()
+        .map((d) => ({
+          date: d.date.slice(5), // MM-DD format
+          売上: d.payment_amount || 0,
+          粗利: d.profit || 0,
+          コスト: d.cost || 0,
+          利益率: d.gross_profit_margin || 0,
+        }));
+    } else {
+      // Monthly view - aggregate by month
+      const monthlyMap = new Map<string, { payment: number; profit: number; cost: number; marginSum: number; count: number }>();
+      
+      dailyAnalytics.forEach((d) => {
+        const monthKey = d.date.slice(0, 7); // YYYY-MM
+        const existing = monthlyMap.get(monthKey) || { payment: 0, profit: 0, cost: 0, marginSum: 0, count: 0 };
+        monthlyMap.set(monthKey, {
+          payment: existing.payment + (d.payment_amount || 0),
+          profit: existing.profit + (d.profit || 0),
+          cost: existing.cost + (d.cost || 0),
+          marginSum: existing.marginSum + (d.gross_profit_margin || 0),
+          count: existing.count + 1,
+        });
+      });
+
+      return Array.from(monthlyMap.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .slice(-12) // Last 12 months
+        .map(([month, data]) => ({
+          date: month.slice(2), // YY-MM format
+          売上: data.payment,
+          粗利: data.profit,
+          コスト: data.cost,
+          利益率: data.count > 0 ? Math.round(data.marginSum / data.count * 10) / 10 : 0,
+        }));
+    }
+  })();
+
+  // Chart data for revenue/profit/cost (left Y axis)
+  const revenueChartData = processedChartData.map((d) => ({
+    date: d.date,
+    売上: d.売上,
+    粗利: d.粗利,
+    コスト: d.コスト,
+  }));
+
+  // Chart data for profit margin (right Y axis - percentage)
+  const marginChartData = processedChartData.map((d) => ({
+    date: d.date,
+    利益率: d.利益率,
+  }));
 
   return (
     <AdminLayout title="売上分析">
       <div className="space-y-6">
         {/* Legacy data summary */}
         {dailyAnalytics && dailyAnalytics.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">総売上（レガシー）</CardTitle>
@@ -144,6 +199,22 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">¥{totalProfit.toLocaleString()}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">総コスト（レガシー）</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">¥{totalCost.toLocaleString()}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">平均利益率</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{avgProfitMargin}%</div>
               </CardContent>
             </Card>
             <Card>
@@ -187,15 +258,25 @@ export default function Analytics() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Daily revenue chart from legacy data */}
-          {dailyRevenueData.length > 0 && (
+          {processedChartData.length > 0 && (
             <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>日別売上・粗利（レガシー過去30日間）</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>
+                    {viewMode === "daily" ? "日別" : "月別"}売上・粗利・コスト（レガシー）
+                  </CardTitle>
+                  <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "daily" | "monthly")}>
+                    <TabsList>
+                      <TabsTrigger value="daily">日別</TabsTrigger>
+                      <TabsTrigger value="monthly">月別</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={dailyRevenueData}>
+                    <LineChart data={revenueChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                       <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
@@ -210,8 +291,31 @@ export default function Analytics() {
                       <Legend />
                       <Line type="monotone" dataKey="売上" stroke="#3B82F6" strokeWidth={2} dot={false} />
                       <Line type="monotone" dataKey="粗利" stroke="#10B981" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="コスト" stroke="#F59E0B" strokeWidth={2} dot={false} />
                     </LineChart>
                   </ResponsiveContainer>
+                </div>
+                {/* Profit margin chart */}
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">利益率推移</h4>
+                  <div className="h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={marginChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} unit="%" />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                          }}
+                          formatter={(value: number) => [`${value.toFixed(1)}%`, "利益率"]}
+                        />
+                        <Line type="monotone" dataKey="利益率" stroke="#EF4444" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </CardContent>
             </Card>
