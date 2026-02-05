@@ -65,8 +65,11 @@
 - `site_id` / `referral_site_id` の意味
 
 ### 13. oversea_waits.csv
-- 海外発送の待機リスト？
-- `shire_state` の意味
+- ✅ 解決済み: 海外発送の待機リスト
+- ✅ `shire_state`: 0=未購入（未発送）, 1=購入済み（発送済み）
+- ✅ `status`: 9=削除済み
+- `pack_card_id` と `card_id` の関係は？（pack_cardsテーブルとの紐付け）
+- `num` は数量？
 
 ### 14. card_rarities.csv / consts.csv
 - カラム一覧を提供してください
