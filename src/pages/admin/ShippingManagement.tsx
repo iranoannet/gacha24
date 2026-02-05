@@ -65,7 +65,7 @@ export default function ShippingManagement() {
   const itemsPerPage = 50;
   const printRef = useRef<HTMLDivElement>(null);
   const { data: shippingRequests, isLoading } = useQuery({
-    queryKey: ["admin-shipping", statusFilter, tenant?.id],
+    queryKey: ["admin-shipping-v2", statusFilter, tenant?.id],
     queryFn: async () => {
       let query = supabase
         .from("inventory_actions")
@@ -143,7 +143,7 @@ export default function ShippingManagement() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-shipping"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-shipping-v2"] });
       setSelectedIds([]);
       setTrackingDialogOpen(false);
       setTrackingNumber("");

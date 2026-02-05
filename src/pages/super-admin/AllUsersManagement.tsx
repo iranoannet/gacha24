@@ -34,7 +34,7 @@ export default function AllUsersManagement() {
   });
 
   const { data: profiles, isLoading } = useQuery({
-    queryKey: ["super-admin-all-profiles", tenantFilter],
+    queryKey: ["super-admin-all-profiles-v2", tenantFilter],
     queryFn: async () => {
       let query = supabase
         .from("profiles")

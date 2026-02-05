@@ -72,7 +72,7 @@ export default function UserManagement() {
   const { tenant } = useTenant();
 
   const { data: profiles, isLoading } = useQuery({
-    queryKey: ["admin-profiles", tenant?.id],
+    queryKey: ["admin-profiles-v2", tenant?.id],
     queryFn: async () => {
       let query = supabase
         .from("profiles")
@@ -203,7 +203,7 @@ export default function UserManagement() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-profiles", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-profiles-v2", tenant?.id] });
       toast.success("ポイントを更新しました");
       setPointAdjustment(0);
     },
