@@ -74,20 +74,35 @@ export default function UserManagement() {
   const { data: profiles, isLoading } = useQuery({
     queryKey: ["admin-profiles-v2", tenant?.id],
     queryFn: async () => {
-      let query = supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .range(0, 50000);
-      
-      // Apply tenant filter
-      if (tenant?.id) {
-        query = query.eq("tenant_id", tenant.id);
+      const batchSize = 1000;
+      let allData: ProfileWithEmail[] = [];
+      let hasMore = true;
+      let offset = 0;
+
+      while (hasMore) {
+        let query = supabase
+          .from("profiles")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(offset, offset + batchSize - 1);
+        
+        if (tenant?.id) {
+          query = query.eq("tenant_id", tenant.id);
+        }
+        
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...(data as ProfileWithEmail[])];
+          offset += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
       }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as ProfileWithEmail[];
+
+      return allData;
     },
   });
 
@@ -141,36 +156,68 @@ export default function UserManagement() {
   const { data: payments } = useQuery({
     queryKey: ["admin-all-payments", tenant?.id],
     queryFn: async () => {
-      let query = supabase
-        .from("payments")
-        .select("user_id, amount, created_at")
-        .range(0, 50000);
-      
-      if (tenant?.id) {
-        query = query.eq("tenant_id", tenant.id);
+      const batchSize = 1000;
+      let allData: any[] = [];
+      let hasMore = true;
+      let offset = 0;
+
+      while (hasMore) {
+        let query = supabase
+          .from("payments")
+          .select("user_id, amount, created_at")
+          .range(offset, offset + batchSize - 1);
+        
+        if (tenant?.id) {
+          query = query.eq("tenant_id", tenant.id);
+        }
+        
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
       }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
+
+      return allData;
     },
   });
 
   const { data: transactions } = useQuery({
     queryKey: ["admin-all-transactions", tenant?.id],
     queryFn: async () => {
-      let query = supabase
-        .from("user_transactions")
-        .select("user_id, total_spent_points, play_count")
-        .range(0, 50000);
-      
-      if (tenant?.id) {
-        query = query.eq("tenant_id", tenant.id);
+      const batchSize = 1000;
+      let allData: any[] = [];
+      let hasMore = true;
+      let offset = 0;
+
+      while (hasMore) {
+        let query = supabase
+          .from("user_transactions")
+          .select("user_id, total_spent_points, play_count")
+          .range(offset, offset + batchSize - 1);
+        
+        if (tenant?.id) {
+          query = query.eq("tenant_id", tenant.id);
+        }
+        
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
       }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
+
+      return allData;
     },
   });
 

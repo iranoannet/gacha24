@@ -67,31 +67,46 @@ export default function ShippingManagement() {
   const { data: shippingRequests, isLoading } = useQuery({
     queryKey: ["admin-shipping-v2", statusFilter, tenant?.id],
     queryFn: async () => {
-      let query = supabase
-        .from("inventory_actions")
-        .select(`
-          *,
-          cards(*),
-          gacha_slots(*, gacha_masters(*))
-        `)
-        .eq("action_type", "shipping")
-        .order("requested_at", { ascending: false })
-        .range(0, 50000);
+      // Fetch all data in batches of 1000 to overcome Supabase's default limit
+      const batchSize = 1000;
+      let allData: any[] = [];
+      let hasMore = true;
+      let offset = 0;
 
-      if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
+      while (hasMore) {
+        let query = supabase
+          .from("inventory_actions")
+          .select(`
+            *,
+            cards(*),
+            gacha_slots(*, gacha_masters(*))
+          `)
+          .eq("action_type", "shipping")
+          .order("requested_at", { ascending: false })
+          .range(offset, offset + batchSize - 1);
+
+        if (statusFilter !== "all") {
+          query = query.eq("status", statusFilter);
+        }
+
+        if (tenant?.id) {
+          query = query.eq("tenant_id", tenant.id);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
       }
-
-      // Apply tenant filter
-      if (tenant?.id) {
-        query = query.eq("tenant_id", tenant.id);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
 
       // Fetch user profiles for addresses
-      const userIds = [...new Set((data || []).map(d => d.user_id))];
+      const userIds = [...new Set(allData.map(d => d.user_id))];
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id, display_name, email, last_name, first_name, last_name_kana, first_name_kana, postal_code, prefecture, city, address_line1, address_line2, phone_number")
@@ -99,7 +114,7 @@ export default function ShippingManagement() {
 
       const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
 
-      return (data || []).map(item => ({
+      return allData.map(item => ({
         ...item,
         profile: profileMap.get(item.user_id) || null,
       })) as (InventoryAction & {
