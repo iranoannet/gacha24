@@ -12,6 +12,11 @@ interface LegacyTransactionRecord {
   pack_id: number;
   user_id: number;  // legacy user ID
   point: number;
+  pack_name?: string;
+  reduction_point?: number;
+  delivery_code?: string;
+  delivery_status?: number;
+  delivery_date?: string;
   created: string;
   modified: string;
 }
@@ -146,28 +151,76 @@ async function handleLegacyImport(supabaseAdmin: any, tenant_id: string, csv_dat
 
   console.log(`Built legacy user mapping: ${legacyUserIdToUserId.size} users`);
 
+  // Fetch gachas for pack_name lookup
+  const { data: gachas } = await supabaseAdmin
+    .from("gacha_masters")
+    .select("id, title")
+    .eq("tenant_id", tenant_id);
+  
+  const titleToGachaId = new Map<string, string>();
+  // deno-lint-ignore no-explicit-any
+  gachas?.forEach((g: any) => {
+    if (g.title) titleToGachaId.set(g.title.toLowerCase().trim(), g.id);
+  });
+  console.log(`Built gacha title mapping: ${titleToGachaId.size} gachas`);
+
   // Parse CSV
   const lines = csv_data.trim().split("\n").filter((line: string) => line.trim());
   
   const firstLine = lines[0]?.toLowerCase() || "";
-  const hasHeaders = firstLine.includes("pack_id") || firstLine.includes("user_id");
+  const hasHeaders = firstLine.includes("pack_id") || firstLine.includes("user_id") || firstLine.includes("pack_name");
   const startIndex = hasHeaders ? 1 : 0;
+
+  // Detect column positions from headers
+  let colMap: { [key: string]: number } = {};
+  if (hasHeaders) {
+    const headers = parseCSVLine(lines[0]).map((h: string) => h.toLowerCase().trim());
+    headers.forEach((h: string, idx: number) => {
+      colMap[h] = idx;
+    });
+  }
   
   const recordMap = new Map<number, LegacyTransactionRecord>(); // Deduplicate by legacy id
   for (let i = startIndex; i < lines.length; i++) {
     const values = parseCSVLine(lines[i]);
     
-    // Format: id,pack_id,user_id,point,created,modified
-    const id = parseInt(values[0]) || 0;
-    const pack_id = parseInt(values[1]) || 0;
-    const user_id = parseInt(values[2]) || 0;
-    const point = parseInt(values[3]) || 0;
-    const created = cleanValue(values[4]) || "";
-    const modified = cleanValue(values[5]) || "";
+    // Support both positional and header-based column mapping
+    let id: number, pack_id: number, user_id: number, point: number;
+    let pack_name: string | undefined, reduction_point: number | undefined;
+    let delivery_code: string | undefined, delivery_status: number | undefined, delivery_date: string | undefined;
+    let created: string, modified: string;
+
+    if (Object.keys(colMap).length > 0) {
+      // Header-based mapping (extended format)
+      id = parseInt(values[colMap["id"]] || "0") || 0;
+      pack_id = parseInt(values[colMap["pack_id"]] || "0") || 0;
+      user_id = parseInt(values[colMap["user_id"]] || "0") || 0;
+      point = parseInt(values[colMap["point"]] || "0") || 0;
+      pack_name = cleanValue(values[colMap["pack_name"]]);
+      reduction_point = parseInt(values[colMap["reduction_point"]] || "0") || 0;
+      delivery_code = cleanValue(values[colMap["delivery_code"]]);
+      delivery_status = parseInt(values[colMap["delivery_status"]] || "0") || undefined;
+      delivery_date = cleanValue(values[colMap["delivery_date"]]);
+      created = cleanValue(values[colMap["created"]]) || "";
+      modified = cleanValue(values[colMap["modified"]]) || "";
+    } else {
+      // Positional format: id,pack_id,user_id,point,created,modified
+      id = parseInt(values[0]) || 0;
+      pack_id = parseInt(values[1]) || 0;
+      user_id = parseInt(values[2]) || 0;
+      point = parseInt(values[3]) || 0;
+      created = cleanValue(values[4]) || "";
+      modified = cleanValue(values[5]) || "";
+    }
     
     if (id > 0 && user_id > 0) {
       // Keep the latest record for each legacy id (last one wins)
-      recordMap.set(id, { id, pack_id, user_id, point, created, modified });
+      recordMap.set(id, { 
+        id, pack_id, user_id, point, 
+        pack_name, reduction_point,
+        delivery_code, delivery_status, delivery_date,
+        created, modified 
+      });
     }
   }
   
@@ -179,6 +232,7 @@ async function handleLegacyImport(supabaseAdmin: any, tenant_id: string, csv_dat
   let inserted = 0;
   let skipped = duplicatesInFile; // Start with file duplicates
   let userNotFound = 0;
+  let gachaMatched = 0;
   const errors: string[] = [];
   const failedRows: { row: number; legacy_user_id: number; reason: string }[] = [];
 
@@ -197,9 +251,16 @@ async function handleLegacyImport(supabaseAdmin: any, tenant_id: string, csv_dat
         continue;
       }
 
+      // Try to match gacha by pack_name
+      let gachaId: string | null = null;
+      if (record.pack_name) {
+        gachaId = titleToGachaId.get(record.pack_name.toLowerCase().trim()) || null;
+        if (gachaId) gachaMatched++;
+      }
+
       toInsert.push({
         user_id: userId,
-        gacha_id: null, // Legacy doesn't have direct gacha mapping
+        gacha_id: gachaId,
         tenant_id,
         play_count: 1,
         total_spent_points: record.point,
@@ -258,6 +319,7 @@ async function handleLegacyImport(supabaseAdmin: any, tenant_id: string, csv_dat
       inserted,
       skipped,
       user_not_found: userNotFound,
+      gacha_matched: gachaMatched,
       errors: errors.length > 0 ? errors : undefined,
       failed_rows_sample: failedRows.slice(0, 50), // Return first 50 failed rows
     }),
