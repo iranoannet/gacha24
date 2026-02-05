@@ -97,8 +97,11 @@ export type Database = {
       }
       daily_analytics: {
         Row: {
+          cost: number | null
           created_at: string | null
           date: string
+          expenses: number | null
+          gross_profit_margin: number | null
           id: string
           legacy_id: number | null
           payment_amount: number | null
@@ -108,8 +111,11 @@ export type Database = {
           tenant_id: string | null
         }
         Insert: {
+          cost?: number | null
           created_at?: string | null
           date: string
+          expenses?: number | null
+          gross_profit_margin?: number | null
           id?: string
           legacy_id?: number | null
           payment_amount?: number | null
@@ -119,8 +125,11 @@ export type Database = {
           tenant_id?: string | null
         }
         Update: {
+          cost?: number | null
           created_at?: string | null
           date?: string
+          expenses?: number | null
+          gross_profit_margin?: number | null
           id?: string
           legacy_id?: number | null
           payment_amount?: number | null

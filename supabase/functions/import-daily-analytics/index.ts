@@ -6,13 +6,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface DailyAnalyticsRecord {
+interface DailyAnalyticsRecordBase {
   legacy_id: number;
   date: string;
+  status: number;
+}
+
+interface DayDataRecord extends DailyAnalyticsRecordBase {
   payment_amount: number;
   profit: number;
   points_used: number;
-  status: number;
+}
+
+interface SalesCostRecord extends DailyAnalyticsRecordBase {
+  sales: number;
+  cost: number;
+  expenses: number;
+  gross_profit_margin: number;
 }
 
 serve(async (req) => {
@@ -76,41 +86,75 @@ serve(async (req) => {
       });
     }
 
-    const records: DailyAnalyticsRecord[] = [];
     const lines = csv_data.trim().split("\n").filter((line: string) => line.trim());
     
-    // Skip header line
-    for (let i = 1; i < lines.length; i++) {
-      const values = parseCSVLine(lines[i]);
-      
-      // Parse date from YYYYMMDD format
-      const dateStr = values[1]?.trim();
-      if (!dateStr || dateStr.length !== 8) continue;
-      
-      const formattedDate = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
-      
-      records.push({
-        legacy_id: parseInt(values[0]?.trim() || "0", 10),
-        date: formattedDate,
-        payment_amount: parseInt(values[2]?.trim() || "0", 10),
-        profit: parseInt(values[3]?.trim() || "0", 10),
-        points_used: parseInt(values[4]?.trim() || "0", 10),
-        status: parseInt(values[5]?.trim() || "0", 10),
-      });
+    // Detect format from header
+    const headerLine = lines[0]?.toLowerCase() || "";
+    const isSalesCostFormat = headerLine.includes("sales") || headerLine.includes("cost") || headerLine.includes("expenses");
+    
+    console.log(`Detected format: ${isSalesCostFormat ? "sales_cost_managements" : "day_datas"}`);
+    
+    const recordsToInsert: any[] = [];
+    
+    if (isSalesCostFormat) {
+      // sales_cost_managements.csv format
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i]);
+        
+        // Parse date - could be YYYY-MM-DD or YYYYMMDD
+        let dateStr = values[5]?.trim();
+        if (!dateStr) continue;
+        
+        // Normalize date format
+        if (dateStr.length === 8 && !dateStr.includes("-")) {
+          dateStr = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+        }
+        
+        const grossProfitMargin = parseFloat(values[4]?.trim() || "0");
+        
+        recordsToInsert.push({
+          legacy_id: parseInt(values[0]?.trim() || "0", 10),
+          date: dateStr,
+          payment_amount: parseInt(values[1]?.trim() || "0", 10), // sales
+          cost: parseInt(values[2]?.trim() || "0", 10),
+          expenses: parseInt(values[3]?.trim() || "0", 10),
+          gross_profit_margin: grossProfitMargin,
+          status: parseInt(values[6]?.trim() || "0", 10),
+          tenant_id,
+        });
+      }
+    } else {
+      // day_datas.csv format (original)
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i]);
+        
+        // Parse date from YYYYMMDD format
+        const dateStr = values[1]?.trim();
+        if (!dateStr || dateStr.length !== 8) continue;
+        
+        const formattedDate = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+        
+        recordsToInsert.push({
+          legacy_id: parseInt(values[0]?.trim() || "0", 10),
+          date: formattedDate,
+          payment_amount: parseInt(values[2]?.trim() || "0", 10),
+          profit: parseInt(values[3]?.trim() || "0", 10),
+          points_used: parseInt(values[4]?.trim() || "0", 10),
+          status: parseInt(values[5]?.trim() || "0", 10),
+          tenant_id,
+        });
+      }
     }
 
-    console.log(`Parsed ${records.length} daily analytics records`);
+    console.log(`Parsed ${recordsToInsert.length} daily analytics records`);
 
     // Batch insert (500 records at a time)
     const BATCH_SIZE = 500;
     let inserted = 0;
     const errors: string[] = [];
 
-    for (let i = 0; i < records.length; i += BATCH_SIZE) {
-      const batch = records.slice(i, i + BATCH_SIZE).map(record => ({
-        ...record,
-        tenant_id,
-      }));
+    for (let i = 0; i < recordsToInsert.length; i += BATCH_SIZE) {
+      const batch = recordsToInsert.slice(i, i + BATCH_SIZE);
 
       const { data, error } = await supabaseAdmin
         .from("daily_analytics")
@@ -131,7 +175,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        total_records: records.length,
+        total_records: recordsToInsert.length,
+        format: isSalesCostFormat ? "sales_cost_managements" : "day_datas",
         inserted,
         errors: errors.length > 0 ? errors : undefined,
       }),
