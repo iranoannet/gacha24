@@ -65,7 +65,7 @@
 - `site_id` / `referral_site_id` の意味
 
 ### 13. oversea_waits.csv
-- ✅ 解決済み: 海外発送の待機リスト
+- ✅ 解決済み: 海外発送履歴（発送済み/未発送両方含む）
 - ✅ `status`: 0=未発送, 1=発送済み
 - ✅ `shire_state`: 9=削除済み
 - `pack_card_id` と `card_id` の関係は？（pack_cardsテーブルとの紐付け）

@@ -54,9 +54,9 @@ const DATA_FORMATS: Record<Exclude<DataType, "unknown">, { label: string; functi
     description: "ポイント還元履歴（userpoint_trigger_histories）",
   },
   "pending-shipments": {
-    label: "未発送リスト",
+    label: "発送履歴（海外）",
     functionName: "import-pending-shipments",
-    description: "未発送リスト（oversea_waits）",
+    description: "発送履歴（oversea_waits: 発送済み/未発送両方含む）",
   },
 };
 
