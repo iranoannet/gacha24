@@ -85,8 +85,12 @@ export default function AnimationSettings() {
   });
 
   const handleCreatePattern = async () => {
-    if (!newPatternName.trim() || !tenant?.id) {
+    if (!newPatternName.trim()) {
       toast.error("パターン名を入力してください");
+      return;
+    }
+    if (!tenant?.id) {
+      toast.error("テナント情報が取得できません。ページを再読み込みしてください。");
       return;
     }
 
