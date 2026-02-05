@@ -124,10 +124,29 @@ export default function Analytics() {
   const processedChartData = (() => {
     if (!dailyAnalytics || dailyAnalytics.length === 0) return [];
 
+    // Helper to filter outliers (values beyond 3 standard deviations)
+    const filterOutliers = (data: typeof dailyAnalytics) => {
+      const profits = data.map(d => d.profit || 0).filter(v => v !== 0);
+      if (profits.length === 0) return data;
+      
+      const mean = profits.reduce((a, b) => a + b, 0) / profits.length;
+      const stdDev = Math.sqrt(profits.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / profits.length);
+      const threshold = stdDev * 3;
+      
+      return data.map(d => {
+        const profit = d.profit || 0;
+        // Cap extreme outliers
+        if (Math.abs(profit - mean) > threshold) {
+          return { ...d, profit: profit > mean ? mean + threshold : mean - threshold };
+        }
+        return d;
+      });
+    };
+
     if (viewMode === "daily") {
       // Daily view - last 30 days
-      return dailyAnalytics
-        .slice(0, 30)
+      const filtered = filterOutliers(dailyAnalytics.slice(0, 30));
+      return filtered
         .reverse()
         .map((d) => ({
           date: d.date.slice(5), // MM-DD format
@@ -140,7 +159,8 @@ export default function Analytics() {
       // Monthly view - aggregate by month
       const monthlyMap = new Map<string, { payment: number; profit: number; cost: number; marginSum: number; count: number }>();
       
-      dailyAnalytics.forEach((d) => {
+      const filtered = filterOutliers(dailyAnalytics);
+      filtered.forEach((d) => {
         const monthKey = d.date.slice(0, 7); // YYYY-MM
         const existing = monthlyMap.get(monthKey) || { payment: 0, profit: 0, cost: 0, marginSum: 0, count: 0 };
         monthlyMap.set(monthKey, {
