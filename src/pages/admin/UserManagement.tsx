@@ -78,7 +78,7 @@ export default function UserManagement() {
         .from("profiles")
         .select("*")
         .order("created_at", { ascending: false })
-        .range(0, 10000);
+        .range(0, 50000);
       
       // Apply tenant filter
       if (tenant?.id) {

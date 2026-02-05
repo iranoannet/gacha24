@@ -76,7 +76,7 @@ export default function ShippingManagement() {
         `)
         .eq("action_type", "shipping")
         .order("requested_at", { ascending: false })
-        .range(0, 10000);
+        .range(0, 50000);
 
       if (statusFilter !== "all") {
         query = query.eq("status", statusFilter);
