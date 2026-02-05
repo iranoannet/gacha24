@@ -67,11 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: superAdminData } = await supabase.rpc("is_super_admin");
       setIsSuperAdmin(superAdminData === true);
 
-      // Get tenant_id from profile
+      // Get tenant_id from profile (use limit(1) for users with multiple tenant profiles)
       const { data: profile } = await supabase
         .from("profiles")
         .select("tenant_id")
         .eq("user_id", userId)
+        .limit(1)
         .maybeSingle();
       
       setTenantId(profile?.tenant_id ?? null);
