@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
+import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film, Plus, Trash2, Upload, Play, ChevronDown, ChevronRight, Edit2, Check, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -41,7 +42,12 @@ const PRIZE_TIERS = [
 
 export default function AnimationSettings() {
   const { tenant } = useTenant();
+  const { tenantId: authTenantId } = useAuth();
   const queryClient = useQueryClient();
+  
+  // Use tenant from URL if available, otherwise use tenant from auth
+  const effectiveTenantId = tenant?.id || authTenantId;
+  
   const [newPatternName, setNewPatternName] = useState("");
   const [newPatternDescription, setNewPatternDescription] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -53,35 +59,35 @@ export default function AnimationSettings() {
 
   // Fetch patterns
   const { data: patterns, isLoading: patternsLoading } = useQuery({
-    queryKey: ["animation-patterns", tenant?.id],
+    queryKey: ["animation-patterns", effectiveTenantId],
     queryFn: async () => {
-      if (!tenant?.id) return [];
+      if (!effectiveTenantId) return [];
       const { data, error } = await supabase
         .from("gacha_animation_patterns")
         .select("*")
-        .eq("tenant_id", tenant.id)
+        .eq("tenant_id", effectiveTenantId)
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data as AnimationPattern[];
     },
-    enabled: !!tenant?.id,
+    enabled: !!effectiveTenantId,
   });
 
   // Fetch all videos for this tenant's patterns
   const { data: videos } = useQuery({
-    queryKey: ["animation-videos", tenant?.id],
+    queryKey: ["animation-videos", effectiveTenantId],
     queryFn: async () => {
-      if (!tenant?.id) return [];
+      if (!effectiveTenantId) return [];
       const { data, error } = await supabase
         .from("gacha_animation_videos")
         .select("*")
-        .eq("tenant_id", tenant.id)
+        .eq("tenant_id", effectiveTenantId)
         .not("pattern_id", "is", null)
         .order("prize_tier", { ascending: true });
       if (error) throw error;
       return data as AnimationVideo[];
     },
-    enabled: !!tenant?.id,
+    enabled: !!effectiveTenantId,
   });
 
   const handleCreatePattern = async () => {
@@ -89,7 +95,7 @@ export default function AnimationSettings() {
       toast.error("パターン名を入力してください");
       return;
     }
-    if (!tenant?.id) {
+    if (!effectiveTenantId) {
       toast.error("テナント情報が取得できません。ページを再読み込みしてください。");
       return;
     }
@@ -99,7 +105,7 @@ export default function AnimationSettings() {
       const { error } = await supabase
         .from("gacha_animation_patterns")
         .insert({
-          tenant_id: tenant.id,
+          tenant_id: effectiveTenantId,
           name: newPatternName.trim(),
           description: newPatternDescription.trim() || null,
         });
@@ -109,7 +115,7 @@ export default function AnimationSettings() {
       toast.success("演出パターンを作成しました");
       setNewPatternName("");
       setNewPatternDescription("");
-      queryClient.invalidateQueries({ queryKey: ["animation-patterns", tenant.id] });
+      queryClient.invalidateQueries({ queryKey: ["animation-patterns", effectiveTenantId] });
     } catch (error) {
       toast.error("作成に失敗しました");
       console.error(error);
@@ -130,8 +136,8 @@ export default function AnimationSettings() {
       if (error) throw error;
 
       toast.success("演出パターンを削除しました");
-      queryClient.invalidateQueries({ queryKey: ["animation-patterns", tenant?.id] });
-      queryClient.invalidateQueries({ queryKey: ["animation-videos", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["animation-patterns", effectiveTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["animation-videos", effectiveTenantId] });
     } catch (error) {
       toast.error("削除に失敗しました");
       console.error(error);
@@ -154,7 +160,7 @@ export default function AnimationSettings() {
 
       toast.success("パターン名を更新しました");
       setEditingPattern(null);
-      queryClient.invalidateQueries({ queryKey: ["animation-patterns", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["animation-patterns", effectiveTenantId] });
     } catch (error) {
       toast.error("更新に失敗しました");
       console.error(error);
@@ -162,7 +168,7 @@ export default function AnimationSettings() {
   };
 
   const handleVideoUpload = async (patternId: string, tier: string, file: File) => {
-    if (!tenant?.id) return;
+    if (!effectiveTenantId) return;
 
     if (file.size > 100 * 1024 * 1024) {
       toast.error("ファイルサイズは100MB以下にしてください");
@@ -172,7 +178,7 @@ export default function AnimationSettings() {
     setUploadingTier({ patternId, tier });
 
     try {
-      const fileName = `${tenant.id}/${patternId}/${tier}/${Date.now()}_${file.name}`;
+      const fileName = `${effectiveTenantId}/${patternId}/${tier}/${Date.now()}_${file.name}`;
       
       const { error: uploadError } = await supabase.storage
         .from("gacha-animations")
@@ -187,7 +193,7 @@ export default function AnimationSettings() {
       const { error: dbError } = await supabase
         .from("gacha_animation_videos")
         .insert({
-          tenant_id: tenant.id,
+          tenant_id: effectiveTenantId,
           pattern_id: patternId,
           prize_tier: tier,
           video_url: publicUrl,
@@ -198,7 +204,7 @@ export default function AnimationSettings() {
       if (dbError) throw dbError;
 
       toast.success(`${tier}賞の動画をアップロードしました`);
-      queryClient.invalidateQueries({ queryKey: ["animation-videos", tenant.id] });
+      queryClient.invalidateQueries({ queryKey: ["animation-videos", effectiveTenantId] });
     } catch (error) {
       toast.error("アップロードに失敗しました");
       console.error(error);
@@ -225,7 +231,7 @@ export default function AnimationSettings() {
       if (error) throw error;
 
       toast.success("動画を削除しました");
-      queryClient.invalidateQueries({ queryKey: ["animation-videos", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["animation-videos", effectiveTenantId] });
     } catch (error) {
       toast.error("削除に失敗しました");
       console.error(error);
