@@ -186,15 +186,9 @@
           // Map status: 0 = pending (未発送), 1 = shipped (発送済み)
           const actionStatus = record.status === 1 ? "shipped" : "pending";
  
-        // Check if legacy user exists in migrations
-        if (!legacyIdExists.has(record.card_id)) {
-          userNotFound++;
-          failedRows.push({ row: rowNumber, legacy_user_id: record.card_id, reason: "legacy_user_not_in_migrations" });
-          continue;
-        }
-
-        if (userId) {
-          // User has logged in - link directly
+         // Always insert - either with user_id if found, or with legacy_user_id only
+         if (userId) {
+           // User has logged in - link directly
           toInsert.push({
             user_id: userId,
             legacy_user_id: record.card_id,
@@ -208,7 +202,8 @@
             processed_at: record.status === 1 ? parseDate(record.modified) : null,
           });
         } else {
-          // User hasn't logged in yet - store with legacy_user_id only
+           // User not found yet - store with legacy_user_id only
+           // Will be linked later by trigger when user logs in
           pendingUserLogin++;
           toInsert.push({
             user_id: null,
