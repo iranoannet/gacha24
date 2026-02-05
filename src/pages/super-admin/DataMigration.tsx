@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Building2, AlertCircle, Upload, FileText, CheckCircle, Play, Pause, Square, 
-  HelpCircle, Trash2, File, Clock, XCircle, Loader2, Users, UserPlus
+  HelpCircle, Trash2, File, Clock, XCircle, Loader2, Users, UserPlus, RefreshCw
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
@@ -170,6 +170,8 @@ export default function DataMigration() {
   const [isDragging, setIsDragging] = useState(false);
   const controlRef = useRef<{ paused: boolean; stopped: boolean }>({ paused: false, stopped: false });
   const queryClient = useQueryClient();
+  const reimportInputRef = useRef<HTMLInputElement>(null);
+  const [reimportDataType, setReimportDataType] = useState<DataType | null>(null);
   
   // Bulk profile creation state
   const [isCreatingProfiles, setIsCreatingProfiles] = useState(false);
@@ -420,6 +422,39 @@ export default function DataMigration() {
   const clearQueue = useCallback(() => {
     setFileQueue([]);
   }, []);
+
+  // Re-import handler
+  const handleReimport = useCallback((dataType: DataType) => {
+    setReimportDataType(dataType);
+    reimportInputRef.current?.click();
+  }, []);
+
+  const handleReimportFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !reimportDataType) return;
+
+    const newItems: FileQueueItem[] = [];
+    
+    for (const file of files) {
+      const content = await file.text();
+      
+      newItems.push({
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        file,
+        content,
+        detectedType: reimportDataType,
+        selectedType: reimportDataType,
+        status: "pending",
+        progress: 0,
+      });
+    }
+    
+    setFileQueue(prev => [...prev, ...newItems]);
+    toast.success(`${files.length}件のファイルを「${DATA_FORMATS[reimportDataType]?.label}」形式で追加しました`);
+    
+    e.target.value = "";
+    setReimportDataType(null);
+  }, [reimportDataType]);
 
   const saveImportHistory = async (item: FileQueueItem) => {
     const { data: user } = await supabase.auth.getUser();
@@ -923,6 +958,15 @@ export default function DataMigration() {
             </TabsContent>
 
             <TabsContent value="history" className="space-y-4">
+              {/* Hidden input for re-import */}
+              <input
+                type="file"
+                accept=".csv,.txt"
+                multiple
+                onChange={handleReimportFileSelected}
+                className="hidden"
+                ref={reimportInputRef}
+              />
               {historyLoading ? (
                 <Card>
                   <CardContent className="py-8 text-center">
@@ -948,7 +992,7 @@ export default function DataMigration() {
                               <TableHead>日時</TableHead>
                               <TableHead>結果</TableHead>
                               <TableHead>状態</TableHead>
-                              <TableHead className="w-[50px]"></TableHead>
+                              <TableHead className="w-[100px]"></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -969,6 +1013,15 @@ export default function DataMigration() {
                                   )}
                                 </TableCell>
                                 <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => handleReimport(type as DataType)}
+                                    title="同じ形式で再インポート"
+                                  >
+                                    <RefreshCw className="h-4 w-4 text-muted-foreground hover:text-primary" />
+                                  </Button>
                                   <Button
                                     variant="ghost"
                                     size="icon"
