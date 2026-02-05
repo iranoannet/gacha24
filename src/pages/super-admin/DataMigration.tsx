@@ -81,6 +81,9 @@ function detectDataType(headers: string[], fileName?: string): DataType {
   if (fileNameLower.includes("day_data") || fileNameLower.includes("daily")) {
     return "daily-sales";
   }
+  if (fileNameLower.includes("sales_cost") || fileNameLower.includes("cost_management")) {
+    return "daily-sales";
+  }
   if (fileNameLower.includes("shipping") || fileNameLower.includes("wait")) {
     return "shipping-history";
   }
@@ -96,6 +99,10 @@ function detectDataType(headers: string[], fileName?: string): DataType {
   
   // day_datas: id,date,payment,profit,points_used,status
   if (headerStr.includes("payment") || headerStr.includes("profit") || headerStr.includes("rieki")) {
+    return "daily-sales";
+  }
+  // sales_cost_managements: id, sales, cost, expenses, wait_arari, date, status
+  if (headerStr.includes("sales") && headerStr.includes("cost") && headerStr.includes("expenses")) {
     return "daily-sales";
   }
   
