@@ -276,22 +276,63 @@ export default function Analytics() {
           </Card>
         </div>
 
+        {/* Daily/Monthly data boxes */}
+        {dailyAnalytics && dailyAnalytics.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>
+                  {viewMode === "daily" ? "日別" : "月別"}データ（レガシー）
+                </CardTitle>
+                <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "daily" | "monthly")}>
+                  <TabsList>
+                    <TabsTrigger value="daily">日別</TabsTrigger>
+                    <TabsTrigger value="monthly">月別</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                {processedChartData.map((item, index) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <div className="text-sm font-medium text-muted-foreground mb-3">
+                      {viewMode === "daily" ? item.date : `${item.date}月`}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">売上</p>
+                        <p className="text-lg font-bold">¥{item.売上.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">粗利</p>
+                        <p className={`text-lg font-bold ${item.粗利 < 0 ? "text-red-500" : ""}`}>
+                          ¥{item.粗利.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">コスト</p>
+                        <p className="text-lg font-bold">¥{item.コスト.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">利益率</p>
+                        <p className="text-lg font-bold">{item.利益率.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Daily revenue chart from legacy data */}
           {processedChartData.length > 0 && (
             <Card className="lg:col-span-2">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>
-                    {viewMode === "daily" ? "日別" : "月別"}売上・粗利・コスト（レガシー）
-                  </CardTitle>
-                  <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "daily" | "monthly")}>
-                    <TabsList>
-                      <TabsTrigger value="daily">日別</TabsTrigger>
-                      <TabsTrigger value="monthly">月別</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
+                <CardTitle>
+                  {viewMode === "daily" ? "日別" : "月別"}推移グラフ
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-[350px]">
