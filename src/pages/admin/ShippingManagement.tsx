@@ -75,7 +75,8 @@ export default function ShippingManagement() {
           gacha_slots(*, gacha_masters(*))
         `)
         .eq("action_type", "shipping")
-        .order("requested_at", { ascending: false });
+        .order("requested_at", { ascending: false })
+        .range(0, 10000);
 
       if (statusFilter !== "all") {
         query = query.eq("status", statusFilter);

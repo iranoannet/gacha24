@@ -39,7 +39,8 @@ export default function AllUsersManagement() {
       let query = supabase
         .from("profiles")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(0, 10000);
 
       if (tenantFilter !== "all") {
         if (tenantFilter === "none") {
@@ -58,7 +59,7 @@ export default function AllUsersManagement() {
   const { data: userRoles } = useQuery({
     queryKey: ["super-admin-user-roles"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("*");
+      const { data, error } = await supabase.from("user_roles").select("*").range(0, 10000);
       if (error) throw error;
       return data;
     },
