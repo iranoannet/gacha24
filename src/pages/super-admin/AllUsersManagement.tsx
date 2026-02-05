@@ -36,32 +36,67 @@ export default function AllUsersManagement() {
   const { data: profiles, isLoading } = useQuery({
     queryKey: ["super-admin-all-profiles-v2", tenantFilter],
     queryFn: async () => {
-      let query = supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .range(0, 50000);
+      const batchSize = 1000;
+      let allData: any[] = [];
+      let hasMore = true;
+      let offset = 0;
 
-      if (tenantFilter !== "all") {
-        if (tenantFilter === "none") {
-          query = query.is("tenant_id", null);
+      while (hasMore) {
+        let query = supabase
+          .from("profiles")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(offset, offset + batchSize - 1);
+
+        if (tenantFilter !== "all") {
+          if (tenantFilter === "none") {
+            query = query.is("tenant_id", null);
+          } else {
+            query = query.eq("tenant_id", tenantFilter);
+          }
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += batchSize;
+          hasMore = data.length === batchSize;
         } else {
-          query = query.eq("tenant_id", tenantFilter);
+          hasMore = false;
         }
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
+      return allData;
     },
   });
 
   const { data: userRoles } = useQuery({
     queryKey: ["super-admin-user-roles"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("*").range(0, 10000);
-      if (error) throw error;
-      return data;
+      const batchSize = 1000;
+      let allData: any[] = [];
+      let hasMore = true;
+      let offset = 0;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("*")
+          .range(offset, offset + batchSize - 1);
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      return allData;
     },
   });
 

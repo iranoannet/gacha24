@@ -43,26 +43,42 @@ export default function Analytics() {
   const { data: transactions } = useQuery({
     queryKey: ["admin-analytics-transactions", tenantId],
     queryFn: async () => {
-      let query = supabase
-        .from("user_transactions")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .range(0, 50000);
-      
-      if (tenantId) {
-        query = query.eq("tenant_id", tenantId);
+      const batchSize = 1000;
+      let allData: any[] = [];
+      let hasMore = true;
+      let offset = 0;
+
+      while (hasMore) {
+        let query = supabase
+          .from("user_transactions")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(offset, offset + batchSize - 1);
+        
+        if (tenantId) {
+          query = query.eq("tenant_id", tenantId);
+        }
+        
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
       }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
+
+      return allData;
     },
   });
 
   const { data: gachas } = useQuery({
     queryKey: ["admin-analytics-gachas", tenantId],
     queryFn: async () => {
-      let query = supabase.from("gacha_masters").select("*").range(0, 10000);
+      let query = supabase.from("gacha_masters").select("*");
       if (tenantId) {
         query = query.eq("tenant_id", tenantId);
       }
@@ -75,13 +91,29 @@ export default function Analytics() {
   const { data: cards } = useQuery({
     queryKey: ["admin-analytics-cards", tenantId],
     queryFn: async () => {
-      let query = supabase.from("cards").select("*").range(0, 50000);
-      if (tenantId) {
-        query = query.eq("tenant_id", tenantId);
+      const batchSize = 1000;
+      let allData: any[] = [];
+      let hasMore = true;
+      let offset = 0;
+
+      while (hasMore) {
+        let query = supabase.from("cards").select("*").range(offset, offset + batchSize - 1);
+        if (tenantId) {
+          query = query.eq("tenant_id", tenantId);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
       }
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
+
+      return allData;
     },
   });
 
