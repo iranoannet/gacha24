@@ -489,6 +489,7 @@ export type Database = {
           id: string
           legacy_id: number | null
           legacy_pack_card_id: number | null
+          legacy_user_id: number | null
           processed_at: string | null
           requested_at: string
           slot_id: string | null
@@ -496,7 +497,7 @@ export type Database = {
           stock_status: number | null
           tenant_id: string | null
           tracking_number: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           action_type: Database["public"]["Enums"]["action_type"]
@@ -505,6 +506,7 @@ export type Database = {
           id?: string
           legacy_id?: number | null
           legacy_pack_card_id?: number | null
+          legacy_user_id?: number | null
           processed_at?: string | null
           requested_at?: string
           slot_id?: string | null
@@ -512,7 +514,7 @@ export type Database = {
           stock_status?: number | null
           tenant_id?: string | null
           tracking_number?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           action_type?: Database["public"]["Enums"]["action_type"]
@@ -521,6 +523,7 @@ export type Database = {
           id?: string
           legacy_id?: number | null
           legacy_pack_card_id?: number | null
+          legacy_user_id?: number | null
           processed_at?: string | null
           requested_at?: string
           slot_id?: string | null
@@ -528,7 +531,7 @@ export type Database = {
           stock_status?: number | null
           tenant_id?: string | null
           tracking_number?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {

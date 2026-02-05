@@ -86,8 +86,12 @@
        .eq("tenant_id", tenant_id);
      
      const legacyIdToEmail = new Map<number, string>();
-     migrations?.forEach(m => {
-       if (m.legacy_user_id) legacyIdToEmail.set(m.legacy_user_id, m.email);
+    const legacyIdExists = new Set<number>();
+    migrations?.forEach((m: { legacy_user_id: number | null; email: string }) => {
+      if (m.legacy_user_id) {
+        legacyIdToEmail.set(m.legacy_user_id, m.email);
+        legacyIdExists.add(m.legacy_user_id);
+      }
      });
  
      // Fetch profiles to map emails to user_ids
@@ -97,7 +101,7 @@
        .eq("tenant_id", tenant_id);
      
      const emailToUserId = new Map<string, string>();
-     profiles?.forEach(p => {
+    profiles?.forEach((p: { user_id: string; email: string | null }) => {
        if (p.email) emailToUserId.set(p.email.toLowerCase(), p.user_id);
      });
  
@@ -162,6 +166,7 @@
      let inserted = 0;
      let skipped = duplicatesInFile;
      let userNotFound = 0;
+    let pendingUserLogin = 0;
      const errors: string[] = [];
      const failedRows: { row: number; legacy_user_id: number; reason: string }[] = [];
  
@@ -174,35 +179,50 @@
          const record = batch[j];
          const rowNumber = i + j + (hasHeaders ? 2 : 1);
          
-         // Find user by legacy card_id (which is the legacy user id)
+        // Find user by legacy card_id (which is the legacy user id) 
          const email = legacyIdToEmail.get(record.card_id);
-         if (!email) {
-           userNotFound++;
-           failedRows.push({ row: rowNumber, legacy_user_id: record.card_id, reason: "legacy_user_not_in_migrations" });
-           continue;
-         }
-         
-         const userId = emailToUserId.get(email.toLowerCase());
-         if (!userId) {
-           userNotFound++;
-           failedRows.push({ row: rowNumber, legacy_user_id: record.card_id, reason: "user_not_logged_in_yet" });
-           continue;
-         }
+        const userId = email ? emailToUserId.get(email.toLowerCase()) : null;
  
          // Map shire_state: 0 = pending (未発送), 1 = shipped (発送済み)
          const actionStatus = record.shire_state === 1 ? "shipped" : "pending";
  
-         toInsert.push({
-           user_id: userId,
-           tenant_id,
-           action_type: "shipping",
-           status: actionStatus,
-           stock_status: record.shire_state,
-           legacy_id: record.id,
-           legacy_pack_card_id: record.pack_card_id,
-           requested_at: parseDate(record.created),
-           processed_at: record.shire_state === 1 ? parseDate(record.modified) : null,
-         });
+        // Check if legacy user exists in migrations
+        if (!legacyIdExists.has(record.card_id)) {
+          userNotFound++;
+          failedRows.push({ row: rowNumber, legacy_user_id: record.card_id, reason: "legacy_user_not_in_migrations" });
+          continue;
+        }
+
+        if (userId) {
+          // User has logged in - link directly
+          toInsert.push({
+            user_id: userId,
+            legacy_user_id: record.card_id,
+            tenant_id,
+            action_type: "shipping",
+            status: actionStatus,
+            stock_status: record.shire_state,
+            legacy_id: record.id,
+            legacy_pack_card_id: record.pack_card_id,
+            requested_at: parseDate(record.created),
+            processed_at: record.shire_state === 1 ? parseDate(record.modified) : null,
+          });
+        } else {
+          // User hasn't logged in yet - store with legacy_user_id only
+          pendingUserLogin++;
+          toInsert.push({
+            user_id: null,
+            legacy_user_id: record.card_id,
+            tenant_id,
+            action_type: "shipping",
+            status: actionStatus,
+            stock_status: record.shire_state,
+            legacy_id: record.id,
+            legacy_pack_card_id: record.pack_card_id,
+            requested_at: parseDate(record.created),
+            processed_at: record.shire_state === 1 ? parseDate(record.modified) : null,
+          });
+        }
        }
  
        if (toInsert.length > 0) {
@@ -236,6 +256,7 @@
          inserted,
          skipped,
          user_not_found: userNotFound,
+        pending_user_login: pendingUserLogin,
          errors: errors.length > 0 ? errors : undefined,
          failed_rows_sample: failedRows.slice(0, 50),
        }),
