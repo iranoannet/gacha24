@@ -441,6 +441,7 @@ export type Database = {
           records_processed: number | null
           records_skipped: number | null
           status: string | null
+          storage_path: string | null
           tenant_id: string | null
         }
         Insert: {
@@ -455,6 +456,7 @@ export type Database = {
           records_processed?: number | null
           records_skipped?: number | null
           status?: string | null
+          storage_path?: string | null
           tenant_id?: string | null
         }
         Update: {
@@ -469,6 +471,7 @@ export type Database = {
           records_processed?: number | null
           records_skipped?: number | null
           status?: string | null
+          storage_path?: string | null
           tenant_id?: string | null
         }
         Relationships: [
