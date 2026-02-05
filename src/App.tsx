@@ -42,6 +42,7 @@ import UserManagement from "./pages/admin/UserManagement";
 import Analytics from "./pages/admin/Analytics";
 import BannerManagement from "./pages/admin/BannerManagement";
 import UserMigration from "./pages/admin/UserMigration";
+import AnimationSettings from "./pages/admin/AnimationSettings";
 
 // Super Admin pages
 import SuperAdminDashboard from "./pages/super-admin/SuperAdminDashboard";
@@ -99,6 +100,7 @@ const App = () => (
               <Route path="/admin/users" element={<AdminProtectedRoute><UserManagement /></AdminProtectedRoute>} />
               <Route path="/admin/analytics" element={<AdminProtectedRoute><Analytics /></AdminProtectedRoute>} />
               <Route path="/admin/migration" element={<AdminProtectedRoute><UserMigration /></AdminProtectedRoute>} />
+              <Route path="/admin/animations" element={<AdminProtectedRoute><AnimationSettings /></AdminProtectedRoute>} />
               <Route path="/admin/support" element={<AdminProtectedRoute><SupportChat /></AdminProtectedRoute>} />
               
               {/* Super Admin Routes - Protected */}
