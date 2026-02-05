@@ -20,7 +20,7 @@ import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
-type DataType = "users" | "transactions" | "inventory" | "daily-sales" | "shipping-history" | "point-conversions" | "unknown";
+type DataType = "users" | "transactions" | "inventory" | "daily-sales" | "shipping-history" | "point-conversions" | "pending-shipments" | "unknown";
 
 const DATA_FORMATS: Record<Exclude<DataType, "unknown">, { label: string; functionName: string; description: string }> = {
   "users": {
@@ -53,6 +53,11 @@ const DATA_FORMATS: Record<Exclude<DataType, "unknown">, { label: string; functi
     functionName: "import-point-conversions",
     description: "ポイント還元履歴（userpoint_trigger_histories）",
   },
+  "pending-shipments": {
+    label: "未発送リスト",
+    functionName: "import-pending-shipments",
+    description: "未発送リスト（oversea_waits）",
+  },
 };
 
 function detectDataType(headers: string[], fileName?: string): DataType {
@@ -64,6 +69,9 @@ function detectDataType(headers: string[], fileName?: string): DataType {
   if (fileNameLower.includes("userpoint_trigger") || fileNameLower.includes("point_trigger")) {
     return "point-conversions";
   }
+  if (fileNameLower.includes("oversea") || fileNameLower.includes("pending")) {
+    return "pending-shipments";
+  }
   if (fileNameLower.includes("user_histor") || fileNameLower.includes("histories")) {
     return "transactions";
   }
@@ -73,7 +81,7 @@ function detectDataType(headers: string[], fileName?: string): DataType {
   if (fileNameLower.includes("day_data") || fileNameLower.includes("daily")) {
     return "daily-sales";
   }
-  if (fileNameLower.includes("oversea") || fileNameLower.includes("shipping") || fileNameLower.includes("wait")) {
+  if (fileNameLower.includes("shipping") || fileNameLower.includes("wait")) {
     return "shipping-history";
   }
   if (fileNameLower.includes("user") && !fileNameLower.includes("histor")) {
