@@ -13,7 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Building2, AlertCircle, Upload, FileText, CheckCircle, Play, Pause, Square, 
-  HelpCircle, Trash2, File, Clock, XCircle, Loader2, Users, UserPlus, RefreshCw
+  HelpCircle, Trash2, File as FileIcon, Clock, XCircle, Loader2, Users, UserPlus, RefreshCw,
+  CloudUpload, Database
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
@@ -172,6 +173,8 @@ export default function DataMigration() {
   const queryClient = useQueryClient();
   const reimportInputRef = useRef<HTMLInputElement>(null);
   const [reimportDataType, setReimportDataType] = useState<DataType | null>(null);
+  const [storageSaving, setStorageSaving] = useState(false);
+  const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   
   // Bulk profile creation state
   const [isCreatingProfiles, setIsCreatingProfiles] = useState(false);
@@ -456,7 +459,34 @@ export default function DataMigration() {
     setReimportDataType(null);
   }, [reimportDataType]);
 
-  const saveImportHistory = async (item: FileQueueItem) => {
+  // Upload CSV to storage for later re-processing
+  const uploadToStorage = async (item: FileQueueItem): Promise<string | null> => {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const sanitizedName = item.file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const storagePath = `${selectedTenantId}/${item.selectedType}/${timestamp}_${sanitizedName}`;
+      
+      const blob = new Blob([item.content], { type: "text/csv" });
+      const { error } = await supabase.storage
+        .from("import-files")
+        .upload(storagePath, blob, { 
+          contentType: "text/csv",
+          upsert: false 
+        });
+      
+      if (error) {
+        console.error("Storage upload error:", error);
+        return null;
+      }
+      
+      return storagePath;
+    } catch (err) {
+      console.error("Storage upload failed:", err);
+      return null;
+    }
+  };
+
+  const saveImportHistory = async (item: FileQueueItem, storagePath?: string | null) => {
     const { data: user } = await supabase.auth.getUser();
     await supabase.from("import_history").insert({
       tenant_id: selectedTenantId,
@@ -469,8 +499,50 @@ export default function DataMigration() {
       status: item.status,
       imported_by: user.user?.id,
       error_summary: item.error,
+      storage_path: storagePath || null,
     });
     queryClient.invalidateQueries({ queryKey: ["import-history", selectedTenantId] });
+  };
+
+  // Re-process from stored CSV
+  const reprocessFromStorage = async (historyItem: { id: string; storage_path: string | null; data_type: string; file_name: string }) => {
+    if (!historyItem.storage_path) {
+      toast.error("保存されたCSVがありません。再アップロードしてください。");
+      return;
+    }
+
+    setReprocessingId(historyItem.id);
+    try {
+      // Download from storage
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from("import-files")
+        .download(historyItem.storage_path);
+      
+      if (downloadError || !fileData) {
+        throw new Error("ファイルのダウンロードに失敗しました");
+      }
+
+      const content = await fileData.text();
+      const dataType = historyItem.data_type as DataType;
+      
+      // Create new queue item
+      const newItem: FileQueueItem = {
+        id: `reprocess-${Date.now()}`,
+        file: new globalThis.File([content], historyItem.file_name, { type: "text/csv" }),
+        content,
+        detectedType: dataType,
+        selectedType: dataType,
+        status: "pending",
+        progress: 0,
+      };
+      
+      setFileQueue(prev => [...prev, newItem]);
+      toast.success(`「${historyItem.file_name}」をキューに追加しました（ストレージから復元）`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "再処理に失敗しました");
+    } finally {
+      setReprocessingId(null);
+    }
   };
 
   const processFile = async (item: FileQueueItem): Promise<FileQueueItem> => {
@@ -552,9 +624,13 @@ export default function DataMigration() {
       if (controlRef.current.stopped) break;
 
       setFileQueue(prev => prev.map((f, idx) => idx === i ? { ...f, status: "processing" } : f));
+      
+      // Upload to storage before processing (for future re-processing)
+      const storagePath = await uploadToStorage(item);
+      
       const result = await processFile(item);
       setFileQueue(prev => prev.map((f, idx) => idx === i ? result : f));
-      await saveImportHistory(result);
+      await saveImportHistory(result, storagePath);
     }
 
     setIsProcessing(false);
@@ -858,7 +934,7 @@ export default function DataMigration() {
                             <TableRow key={item.id}>
                               <TableCell className="font-mono text-xs">
                                 <div className="flex items-center gap-2">
-                                  <File className="h-4 w-4 text-muted-foreground shrink-0" />
+                                  <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
                                   <span className="truncate max-w-[200px]">{item.file.name}</span>
                                 </div>
                               </TableCell>
@@ -1013,12 +1089,28 @@ export default function DataMigration() {
                                   )}
                                 </TableCell>
                                 <TableCell>
+                                  {(item as any).storage_path && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={() => reprocessFromStorage(item as any)}
+                                      disabled={reprocessingId === item.id}
+                                      title="ストレージから再処理"
+                                    >
+                                      {reprocessingId === item.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Database className="h-4 w-4 text-blue-500 hover:text-blue-600" />
+                                      )}
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7"
                                     onClick={() => handleReimport(type as DataType)}
-                                    title="同じ形式で再インポート"
+                                    title="新しいファイルで再インポート"
                                   >
                                     <RefreshCw className="h-4 w-4 text-muted-foreground hover:text-primary" />
                                   </Button>
