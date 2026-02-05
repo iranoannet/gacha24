@@ -26,3 +26,21 @@ verify_jwt = false
 
 [functions.import-inventory]
 verify_jwt = false
+
+[functions.bulk-create-profiles]
+verify_jwt = false
+
+[functions.delete-import-history]
+verify_jwt = false
+
+[functions.import-daily-analytics]
+verify_jwt = false
+
+[functions.import-shipping-history]
+verify_jwt = false
+
+[functions.import-point-conversions]
+verify_jwt = false
+
+[functions.import-pending-shipments]
+verify_jwt = false
