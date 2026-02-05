@@ -27,6 +27,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Download, Truck, Check, Search, Package, Printer } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -53,6 +61,8 @@ export default function ShippingManagement() {
   const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState("");
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
   const printRef = useRef<HTMLDivElement>(null);
   const { data: shippingRequests, isLoading } = useQuery({
     queryKey: ["admin-shipping", statusFilter, tenant?.id],
@@ -183,7 +193,7 @@ export default function ShippingManagement() {
     toast.success("CSVをエクスポートしました");
   };
 
-  const filteredRequests = shippingRequests?.filter((r) => {
+  const allFilteredRequests = shippingRequests?.filter((r) => {
     if (!searchQuery) return true;
     const search = searchQuery.toLowerCase();
     return (
@@ -192,6 +202,23 @@ export default function ShippingManagement() {
       r.user_id.toLowerCase().includes(search)
     );
   });
+
+  // Pagination
+  const totalItems = allFilteredRequests?.length || 0;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const filteredRequests = allFilteredRequests?.slice(startIndex, startIndex + itemsPerPage);
+
+  // Reset page when filter changes
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value as ActionStatus | "all");
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
 
   const selectedRequests = shippingRequests?.filter((r) => selectedIds.includes(r.id)) || [];
 
@@ -211,11 +238,11 @@ export default function ShippingManagement() {
             <Input
               placeholder="カード名、ガチャ名、ユーザーIDで検索..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10"
             />
           </div>
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as ActionStatus | "all")}>
+          <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
             <SelectTrigger className="w-40">
               <SelectValue />
             </SelectTrigger>
@@ -347,6 +374,54 @@ export default function ShippingManagement() {
             )}
           </CardContent>
         </Card>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              全{totalItems}件中 {startIndex + 1}-{Math.min(startIndex + itemsPerPage, totalItems)}件を表示
+            </p>
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink
+                        onClick={() => setCurrentPage(pageNum)}
+                        isActive={currentPage === pageNum}
+                        className="cursor-pointer"
+                      >
+                        {pageNum}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
 
         {/* Tracking Number Dialog */}
         <Dialog open={trackingDialogOpen} onOpenChange={setTrackingDialogOpen}>
