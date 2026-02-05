@@ -46,7 +46,8 @@ export default function Analytics() {
       let query = supabase
         .from("user_transactions")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(0, 50000);
       
       if (tenantId) {
         query = query.eq("tenant_id", tenantId);
@@ -61,7 +62,7 @@ export default function Analytics() {
   const { data: gachas } = useQuery({
     queryKey: ["admin-analytics-gachas", tenantId],
     queryFn: async () => {
-      let query = supabase.from("gacha_masters").select("*");
+      let query = supabase.from("gacha_masters").select("*").range(0, 10000);
       if (tenantId) {
         query = query.eq("tenant_id", tenantId);
       }
@@ -74,7 +75,7 @@ export default function Analytics() {
   const { data: cards } = useQuery({
     queryKey: ["admin-analytics-cards", tenantId],
     queryFn: async () => {
-      let query = supabase.from("cards").select("*");
+      let query = supabase.from("cards").select("*").range(0, 50000);
       if (tenantId) {
         query = query.eq("tenant_id", tenantId);
       }

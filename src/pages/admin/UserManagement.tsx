@@ -77,7 +77,8 @@ export default function UserManagement() {
       let query = supabase
         .from("profiles")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(0, 10000);
       
       // Apply tenant filter
       if (tenant?.id) {
@@ -142,7 +143,8 @@ export default function UserManagement() {
     queryFn: async () => {
       let query = supabase
         .from("payments")
-        .select("user_id, amount, created_at");
+        .select("user_id, amount, created_at")
+        .range(0, 50000);
       
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
@@ -159,7 +161,8 @@ export default function UserManagement() {
     queryFn: async () => {
       let query = supabase
         .from("user_transactions")
-        .select("user_id, total_spent_points, play_count");
+        .select("user_id, total_spent_points, play_count")
+        .range(0, 50000);
       
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
