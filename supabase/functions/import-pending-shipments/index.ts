@@ -12,8 +12,8 @@
    pack_card_id: number; // legacy pack/card id
    num: number;          // quantity
    comment: string;
-   shire_state: number;  // 0=未購入（未発送）, 1=購入済み（発送済み）
-   status: number;       // 9=削除済み
+  shire_state: number;  // 9=削除済み
+  status: number;       // 0=未発送, 1=発送済み
    created: string;      // requested_at
    modified: string;     // processed_at
  }
@@ -132,8 +132,8 @@
        const created = cleanValue(values[7]) || "";
        const modified = cleanValue(values[8]) || "";
        
-       // Skip deleted records (status = 9)
-       if (status === 9) {
+        // Skip deleted records (shire_state = 9)
+        if (shire_state === 9) {
          skippedDeleted++;
          continue;
        }
@@ -157,7 +157,7 @@
      const duplicatesInFile = (lines.length - startIndex) - records.length - skippedDeleted;
  
      console.log(`Processing ${records.length} pending shipment records`);
-     console.log(`Skipped ${skippedDeleted} deleted records (status=9)`);
+      console.log(`Skipped ${skippedDeleted} deleted records (shire_state=9)`);
      console.log(`${duplicatesInFile} duplicates in file removed`);
      console.log(`Legacy user mappings available: ${legacyIdToEmail.size}`);
      console.log(`Profile mappings available: ${emailToUserId.size}`);
@@ -183,8 +183,8 @@
          const email = legacyIdToEmail.get(record.card_id);
         const userId = email ? emailToUserId.get(email.toLowerCase()) : null;
  
-         // Map shire_state: 0 = pending (未発送), 1 = shipped (発送済み)
-         const actionStatus = record.shire_state === 1 ? "shipped" : "pending";
+          // Map status: 0 = pending (未発送), 1 = shipped (発送済み)
+          const actionStatus = record.status === 1 ? "shipped" : "pending";
  
         // Check if legacy user exists in migrations
         if (!legacyIdExists.has(record.card_id)) {
@@ -201,11 +201,11 @@
             tenant_id,
             action_type: "shipping",
             status: actionStatus,
-            stock_status: record.shire_state,
+            stock_status: record.status,
             legacy_id: record.id,
             legacy_pack_card_id: record.pack_card_id,
             requested_at: parseDate(record.created),
-            processed_at: record.shire_state === 1 ? parseDate(record.modified) : null,
+            processed_at: record.status === 1 ? parseDate(record.modified) : null,
           });
         } else {
           // User hasn't logged in yet - store with legacy_user_id only
@@ -216,11 +216,11 @@
             tenant_id,
             action_type: "shipping",
             status: actionStatus,
-            stock_status: record.shire_state,
+            stock_status: record.status,
             legacy_id: record.id,
             legacy_pack_card_id: record.pack_card_id,
             requested_at: parseDate(record.created),
-            processed_at: record.shire_state === 1 ? parseDate(record.modified) : null,
+            processed_at: record.status === 1 ? parseDate(record.modified) : null,
           });
         }
        }
