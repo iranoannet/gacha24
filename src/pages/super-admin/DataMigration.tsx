@@ -149,7 +149,7 @@ interface FileQueueItem {
   error?: string;
 }
 
-const BATCH_SIZE = 100;
+const BATCH_SIZE = 500; // Increased for faster processing
 
 interface BulkProfileResult {
   total_remaining: number;
