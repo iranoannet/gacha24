@@ -265,9 +265,12 @@ export default function Auth() {
 
           {isLogin && (
             <div className="mt-6 text-center space-y-3">
-              <p className="text-sm text-muted-foreground">
+              <Link
+                to={`${basePath}/password-reset`}
+                className="text-sm text-muted-foreground underline underline-offset-4 hover:text-primary transition-colors"
+              >
                 パスワードをお忘れですか？
-              </p>
+              </Link>
               <Link
                 to={`${basePath}/auth?mode=signup`}
                 className="block text-sm text-foreground underline underline-offset-4 hover:text-primary transition-colors"

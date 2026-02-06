@@ -23,6 +23,7 @@ import FAQ from "./pages/FAQ";
 import Notifications from "./pages/Notifications";
 import NotificationDetail from "./pages/NotificationDetail";
 import Points from "./pages/Points";
+import PasswordReset from "./pages/PasswordReset";
 
 // Mypage pages
 import Coupon from "./pages/mypage/Coupon";
@@ -70,6 +71,7 @@ const App = () => (
               {/* Default routes (no tenant prefix) */}
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/password-reset" element={<PasswordReset />} />
               <Route path="/gacha/:id" element={<GachaDetail />} />
               <Route path="/inventory" element={<Inventory />} />
               <Route path="/history" element={<History />} />
